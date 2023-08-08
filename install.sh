@@ -455,7 +455,7 @@ Example:
 
 __install_fnm() {
     # Set and export the FNM_DIR variable
-    export FNM_DIR=/opt/fnm
+    export FNM_DIR=/opt/fnm #todo remove
 
     # Append the setting to root's .bashrc for persistence
     echo "export FNM_DIR=/opt/fnm" >> /root/.bashrc #todo
@@ -756,6 +756,8 @@ __create_motd_symlink() {
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
+__setup_node_with_fnm
+
 Sets up the Node environment using `fnm` based on the `.node-version` file 
 present in the COMPANION_INSTALL_FOLDER. Also updates the PATH to include 
 the associated Node binaries.
@@ -769,8 +771,9 @@ Arguments:
 Returns:
     None.
 '
-setup_node_with_fnm() {
+__setup_node_with_fnm() {
     local node_version
+    export FNM_DIR=${FNM_DIR}
     export PATH=$FNM_DIR:$PATH
     eval "$(fnm env --shell bash)"
 
@@ -854,7 +857,7 @@ __copy_semantic_versioned_file() {
     local minor=$(__parse_semver "$version" "minor")
     local patch=$(__parse_semver "$version" "patch")
     local file="$2"
-    local targetfolder="$2"
+    local targetfolder="$3"
 
     # Clone the repo and cd into it
     #git clone "$repo_url" cloned_repo
@@ -967,9 +970,10 @@ main_v3() {
     #__install_fnm
     if [[ "$URI" && "$URI" != "null" ]]; then
         #__download_and_extract_package "$(__fetch_latest_uri)"
-        setup_node_with_fnm
+        __setup_node_with_fnm
         cd ${COMPANION_INSTALL_FOLDER}
         echo $PATH
+        which npm
         npm --unsafe-perm install -g yarn #&>/dev/null #todo errorhandlign
         #__install_apt_packages "${COMPANION_DEPS[@]}"
         #__copy_semantic_versioned_file "${IVERSION}" "companion.service" "/etc/systemd/system"
