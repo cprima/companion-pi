@@ -892,17 +892,13 @@ __copy_semantic_versioned_file() {
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 preinstall_3.0.0() {
-    echo "~~PRE~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-    echo "~~PRE~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-    echo "~~PRE~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    echo "~~PRE~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 postinstall_3.0.0() {
-    echo "~~POST~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-    echo "~~POST~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-    echo "~~POST~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    echo "~~POST~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
@@ -968,6 +964,9 @@ main_v3() {
 
     # The Fast and simple Node.js version Manager, instructed to work on the file .node-version
     #__install_fnm
+    if declare -Ff "preinstall_$(__parse_semver "${IVERSION}" "all")" > /dev/null; then
+        "preinstall_$(__parse_semver "${IVERSION}" "all")"
+    fi
     if [[ "$URI" && "$URI" != "null" ]]; then
         #__download_and_extract_package "$(__fetch_latest_uri)"
         __setup_node_with_fnm
@@ -976,11 +975,14 @@ main_v3() {
         which npm
         npm --unsafe-perm install -g yarn #&>/dev/null #todo errorhandlign
         #__install_apt_packages "${COMPANION_DEPS[@]}"
-        #__copy_semantic_versioned_file "${IVERSION}" "companion.service" "/etc/systemd/system"
+        __copy_semantic_versioned_file "${IVERSION}" "companion.service" "/etc/systemd/system"
         #systemctl daemon-reload
         __create_symlinks
         __create_motd_symlink
         #systemctl enable companion
+        if declare -Ff "postinstall_$(__parse_semver "${IVERSION}" "all")" > /dev/null; then
+            "postinstall_$(__parse_semver "${IVERSION}" "all")"
+        fi
 
     else
         echo "No matching package found for target: $(__determine_package_target $(__parse_semver "${IVERSION}" "major")) and version: $IVERSION"
@@ -1064,7 +1066,7 @@ echo "${IVERSION}"
 echo "$ITYPE"
 echo "target: ${target}"
 
-__copy_semantic_versioned_file "${IVERSION}" ".gitkeep" "/tmp"
+#__copy_semantic_versioned_file "${IVERSION}" ".gitkeep" "/tmp"
 
 
 # If this script is run, but not sourced:
@@ -1073,6 +1075,9 @@ if [[ $0 == "$BASH_SOURCE" ]]; then
         echo "Version ${IVERSION} does not meet the specified criteria."
         exit 1
         #todo make work for stable-2.* branches
+    elif [ "$(__parse_semver "${IVERSION}" "major")" -ge "4" ]; then
+        echo "Version ${IVERSION} does not meet the specified criteria."
+        exit 1
     else
         main_v3
     fi
@@ -1102,38 +1107,9 @@ exit 0
 
 
 
-
-
-# configure git for future updates
-git config --global pull.rebase false
-
-# run the update script
-if [ "$COMPANION_BUILD" == "beta" ] || [ "$COMPANION_BUILD" == "experimental" ]; then
-    ./update.sh beta
-else
-    ./update.sh stable "$COMPANION_BUILD"
-fi
-
-# install update script dependencies, as they were ignored
-yarn --cwd "/usr/local/src/companionpi/update-prompt" install
-
-# enable start on boot
-systemctl enable companion
-
 # add the fnm node to this users path
 # TODO - verify permissions
 echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashrc
-
-# check that a build of companion was installed
-if [ ! -d "/opt/companion" ] 
-then
-    echo "No Companion build was installed!\nIt should be possible to recover from this with \"sudo companion-update\"" 
-    exit 9999 # die with error code 9999
-fi
-
-echo "Companion is installed!"
-echo "You can start it with \"sudo systemctl start companion\" or \"sudo companion-update\""
-
 
 
 
