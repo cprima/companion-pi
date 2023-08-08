@@ -1,20 +1,5 @@
 #!/usr/bin/env bash
 
-# todo:
-# parse arguments and commands
-# determine which version the user wants to be installed, fallback to latest
-# ensure prerequisites are met
-# - if v3 is in https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999
-# - todo: v2
-# - install packages
-# - install fnm and configure its use
-# install
-# configure
-# - add user
-# cleanup
-
-# todo: bail if wrong OS / machine
-
 
 #======================================================================================================================
 # CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
@@ -25,6 +10,7 @@
 #----------------------------------------------------------------------------------------------------------------------
 # Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
 #======================================================================================================================
+# Developer Notes at the bottom
 
 # Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
 set -e
@@ -32,6 +18,7 @@ set -e
 # Treat unset variables as an error
 set -o nounset
 
+#todo check use
 __ScriptVersion="v0.1.0"
 __ScriptName="install.sh"
 __ScriptFullName="$0"
@@ -71,10 +58,19 @@ COMPANION_DEPS=("libusb-1.0-0-dev" "libudev-dev" "libfontconfig1")
 COMPANION_OS_ARCHS=("x64" "amd64" "arm64")
 # OS release status (stored as an array)
 COMPANION_RELEASE_STATUSES=("stable" "beta" "experimental") #or COMPANION_INSTALL_TYPES ???
-#
+# system groups to add the companion user to (stored as an array)
 COMPANION_USER_GROUPS=("gpio" "dialout")
+##############todo COMPANION_USER_NAME
+#
+COMPANION_COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999"
 #
 COMPANION_SCRIPTS_TO_SYMLINK=("companion-license" "companion-help" "companion-update" "companion-reset")
+#
+COMPANION_REPO_URL="https://github.com/bitfocus/companion"
+#
+COMPANION_CLONE_FOLDER="/usr/local/src/companion"
+#
+COMPANION_REPO_BRANCH="master"
 #
 COMPANIONPI_REPO_URL="https://github.com/bitfocus/companion-pi"
 COMPANIONPI_REPO_URL="https://github.com/cprima/companion-pi"
@@ -110,6 +106,7 @@ __usage() {
     - stable [version]     Install a specific version.
     - beta                 Install …
     - experimental         Install …
+    - outdated [branch]    Install …??????????????????????????????? or instead of outdated git? todo
 
 
   Examples:
@@ -124,6 +121,7 @@ __usage() {
     - ${__ScriptName} experimental
     - ${__ScriptName} experimental latest
     - ${__ScriptName} experimental 3.99.0+6187-develop-b7144a02
+    - ${__ScriptName} outdated stable-2.4???????????????????????????????????????? todo
 
 
   Options:
@@ -157,7 +155,7 @@ shift "$((OPTIND-1))"
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #         NAME:  __foo
-#  DESCRIPTION:  Foo bar
+#  DESCRIPTION:  Foo bar todo
 #----------------------------------------------------------------------------------------------------------------------
 __foo() {
     echo foo
@@ -173,14 +171,14 @@ The function identifies the systems OS (Mac, Raspberry Pi, or Windows) and its a
 To be used on https://api.bitfocus.io/v1/product/companion/packages?branch=stable
 
 Parameters:
-    $1 - todo
+    $1 - todo write explanation
 
 Return:
     A string representing the determined target platform and architecture.
     Must return one of mac-arm, mac-intel, linux-tgz, linux-arm64-tgz.
 
 Example:
-    target=$(determine_package_target)
+    target=$(__determine_package_target)
     echo "$target"
 '
 #----------------------------------------------------------------------------------------------------------------------
@@ -372,7 +370,7 @@ fi
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
-__install_packages
+__install_apt_packages
 
 Installs packages on a system using apt-get.
 
@@ -384,10 +382,10 @@ Return:
 
 Example:
     packages=("curl" "git" "vim")
-    __install_packages "${packages[@]}"
+    __install_apt_packages "${packages[@]}"
 '
 
-__install_packages() {
+__install_apt_packages() {
     # Check if apt-get is available
     if ! command -v apt-get &> /dev/null; then
         echo "Error: apt-get is not available on this system."
@@ -412,7 +410,7 @@ __install_packages() {
         echo "Error: Failed to install some packages."
         return 3
     fi
-} # ----------  end of function __install_packages  ----------
+} # ----------  end of function __install_apt_packages  ----------
 
 
 
@@ -487,22 +485,24 @@ __is_version_lt_2_4_2() {
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-    : '
-    __clone_or_update_repo
+: '
+__clone_or_update_repo
 
-    Clone or update a Git repository.
+Clone or update a Git repository.
 
-    Usage:
-        clone_or_update_repo <repo_url> <target_dir>
+Usage:
+    clone_or_update_repo <repo_url> <target_dir>
 
-    Parameters:
-        repo_url:    The URL of the Git repository to clone.
-        target_dir:  The directory where the repo should be cloned to or exists already.
-        branch:      (Optional) The specific branch to checkout and pull.
+Parameters:
+    repo_url:    The URL of the Git repository to clone.
+    target_dir:  The directory where the repo should be cloned to or exists already.
+    branch:      (Optional) The specific branch to checkout and pull.
 
-    If the target directory does not exist, this function will clone the repo into it.
-    If the target directory exists and contains a Git repository, this function will update (pull) the repo.
-    If the target directory exists but does not contain a Git repository, an error will be reported.
+If the target directory does not exist, this function will clone the repo into it.
+If the target directory exists and contains a Git repository, this function will update (pull) the repo.
+If the target directory exists but does not contain a Git repository, an error will be reported.
+
+Example:
     '
 
 __clone_or_update_repo() {
@@ -531,23 +531,25 @@ __clone_or_update_repo() {
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-    : '
-    __download_and_extract_package
+: '
+__download_and_extract_package
 
-    Download and extract the Companion update.
+Download and extract the Companion update.
 
-    Usage:
-        download_and_extract_companion <url>
+Usage:
+    download_and_extract_companion <url>
 
-    Parameters:
-        url: The URL to download the Companion update from.
+Parameters:
+    url: The URL to download the Companion update from.
 
-    This function performs the following steps:
-    1. Downloads the specified update from the provided URL.
-    2. Extracts the downloaded tar.gz archive.
-    3. Moves the extracted resources to the /opt/companion directory.
-    4. Cleans up temporary files and directories.
-    '
+Example:
+
+This function performs the following steps:
+1. Downloads the specified update from the provided URL.
+2. Extracts the downloaded tar.gz archive.
+3. Moves the extracted resources to the /opt/companion directory.
+4. Cleans up temporary files and directories.
+'
 
 __download_and_extract_package() {
     local SELECTED_URL="$1"
@@ -571,25 +573,28 @@ __download_and_extract_package() {
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 
-    : '
-    __append_to_path
+: '
+__append_to_path
 
-    Append a directory to the PATH variable in ~/.bashrc if not already present.
+Append a directory to the PATH variable in ~/.bashrc if not already present.
 
-    Usage:
-        append_to_path /path/to/directory
+Usage:
+    append_to_path /path/to/directory
 
-    Parameters:
-        $1: The directory path to add to the PATH.
+Parameters:
+    $1: The directory path to add to the PATH.
 
-    Description:
-        This function checks if the provided directory path is already present in the 
-        PATH variable declaration within the ~/.bashrc file. If the directory is not 
-        already in PATH, the function appends it. If it is already present, a message 
-        indicating the same is displayed.
-    '
+Example:
 # Example usage:
 # __append_to_path "/path/to/directory"
+
+Description:
+    This function checks if the provided directory path is already present in the 
+    PATH variable declaration within the ~/.bashrc file. If the directory is not 
+    already in PATH, the function appends it. If it is already present, a message 
+    indicating the same is displayed.
+'
+
 __append_to_path() {
 
     local new_dir="$1"
@@ -609,19 +614,19 @@ __append_to_path() {
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-    : '
-    __install_update_prompt
+: '
+__install_update_prompt
 
-    Run yarn install in the update-prompt directory of companionpi.
+Run yarn install in the update-prompt directory of companionpi.
 
-    Usage:
-        install_update_prompt
+Usage:
+    install_update_prompt
 
-    Description:
-        This function changes the current working directory to 
-        "/usr/local/src/companionpi/update-prompt" and runs the yarn install 
-        command to install the necessary dependencies.
-    '
+Description:
+    This function changes the current working directory to 
+    "/usr/local/src/companionpi/update-prompt" and runs the yarn install 
+    command to install the necessary dependencies.
+'
 # Example usage:
 # install_update_prompt
 __install_update_prompt() {
@@ -729,8 +734,24 @@ create_motd_symlink() {
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
 
+
+
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+preinstall_3.0.0() {
+    echo "~~PRE~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    echo "~~PRE~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    echo "~~PRE~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+}
+# ----------  end of function __is_version_lt_2_4_2  ----------
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+postinstall_3.0.0() {
+    echo "~~POST~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    echo "~~POST~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    echo "~~POST~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+}
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
 
@@ -741,70 +762,70 @@ create_motd_symlink() {
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 install_packaged() {
 
-prefix="preinstall_"
-variable_part="3.0.0"
-suffix=""
+    prefix="preinstall_"
+    variable_part="3.0.0"
+    suffix=""
 
-function_name="${prefix}${variable_part}${suffix}"
+    function_name="${prefix}${variable_part}${suffix}"
 
-if declare -Ff "$function_name" > /dev/null; then
-    echo "Function ${function_name} exists"
-else
-    echo "Function ${function_name} does not exist"
-fi
+    if declare -Ff "$function_name" > /dev/null; then
+        echo "Function ${function_name} exists"
+    else
+        echo "Function ${function_name} does not exist"
+    fi
 
 
-#__download_and_extract_package
-# do_udev_stuff
-# do sudoers
-# # if neither old or new config direcoty exists, create it. This is to work around a bug in 3.0.0-rc2
-# if [ ! -d "/home/companion/.config/companion-nodejs" ]; then
-#     if [ ! -d "/home/companion/companion" ]; then
-#         su companion -c "mkdir -p /home/companion/.config/companion-nodejs"
-#     fi
-# fi
-# cp companion.service /etc/systemd/system
-# systemctl daemon-reload
-# create_symlinks
-# create_motd_symlink
+    #__download_and_extract_package
+    # do_udev_stuff
+    # do sudoers
+    # # if neither old or new config direcoty exists, create it. This is to work around a bug in 3.0.0-rc2
+    # if [ ! -d "/home/companion/.config/companion-nodejs" ]; then
+    #     if [ ! -d "/home/companion/companion" ]; then
+    #         su companion -c "mkdir -p /home/companion/.config/companion-nodejs"
+    #     fi
+    # fi
+    # cp companion.service /etc/systemd/system
+    # systemctl daemon-reload
+    # create_symlinks
+    # create_motd_symlink
 
-prefix="postinstall_"
-variable_part="3.0.0"
-suffix=""
+    prefix="postinstall_"
+    variable_part="3.0.0"
+    suffix=""
 
-function_name="${prefix}${variable_part}${suffix}"
+    function_name="${prefix}${variable_part}${suffix}"
 
-if declare -Ff "$function_name" > /dev/null; then
-    echo "Function ${function_name} exists"
-else
-    echo "Function ${function_name} does not exist"
-fi
+    if declare -Ff "$function_name" > /dev/null; then
+        echo "Function ${function_name} exists"
+    else
+        echo "Function ${function_name} does not exist"
+    fi
 }
-# ----------  end of function __is_version_lt_2_4_2  ----------
+# ----------  end of function install_packaged  ----------
 
 
-
-
-
-
-
-
+#==end functions=======================================================================================================
 #======================================================================================================================
+#======================================================================================================================
+#======================================================================================================================
+#======================================================================================================================
+#======================================================================================================================
+#======================================================================================================================
+
+
+
+
 # the following code depends on some packages, like git or jq.
-#__install_packages "${INSTALLER_DEPS[@]}"
-
-
-#======================================================================================================================
-
-
-
-
+__install_apt_packages "${INSTALLER_DEPS[@]}"
 
 __clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
+__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
 
-#__install_fnm
+__install_fnm
 export PATH=/opt/fnm:$PATH #todo use global variable
 eval "$(fnm env --shell bash)"
+
+
 
 
 
@@ -838,27 +859,27 @@ if [ "$(echo "$ITYPE" | grep -E '(stable|beta|experimental)')" = "" ]; then #tod
 fi
 #----------------------------------------------------------------------------------------------------------------------
 if [ "$ITYPE" = "stable" ]; then
-    API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
+    COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
     if [ "$#" -eq 0 ];then
-        IVERSION=$(__get_latest_version "${API_URL}" "$(__determine_package_target)" )
+        IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
     else
         IVERSION="$1"
         shift
     fi
 #----------------------------------------------------------------------------------------------------------------------
 elif [ "$ITYPE" = "beta" ]; then
-    API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
+    COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
     if [ "$#" -eq 0 ];then
-        IVERSION=$(__get_latest_version "${API_URL}" "$(__determine_package_target)" )
+        IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
     else
         IVERSION="$1"
         shift
     fi
 #----------------------------------------------------------------------------------------------------------------------
 elif [ "$ITYPE" = "experimental" ]; then
-    API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
+    COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
     if [ "$#" -eq 0 ];then
-        IVERSION=$(__get_latest_version "${API_URL}" "$(__determine_package_target)" )
+        IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
     else
         IVERSION="$1"
         shift
@@ -893,12 +914,12 @@ if __is_version_lt_2_4_2 "${IVERSION}"; then
     echo "Version ${IVERSION} does not meet the specified criteria."
     #todo make work for stable-2.* branches
 else
-    URI=$(curl -s "$API_URL" | jq  --arg target "$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
+    URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
     # Check if empty
     if [[ "$URI" && "$URI" != "null" ]]; then
         ################install_packaged
         echo " Going to download ${URI}"
-        __download_and_extract_package ${URI}
+        __download_and_extract_package ${URI} #todo work in IVERSION and APIURL and target
         cd ${COMPANION_INSTALL_FOLDER}
         pwd
         cat .node-version
@@ -919,7 +940,7 @@ fi
 
 exit 0
 
-__install_packages "${COMPANION_DEPS[@]}"
+__install_apt_packages "${COMPANION_DEPS[@]}"
 
 exit 0
 
@@ -1005,3 +1026,51 @@ echo "You can start it with \"sudo systemctl start companion\" or \"sudo compani
 
 
 exit 0
+
+
+
+
+#======================================================================================================================
+#  Developer Notes
+#----------------------------------------------------------------------------------------------------------------------
+: '
+This script is called curl-to-bash or downloaded-executed.
+
+Anatomy of this script:
+1. variable declarations
+2. parse arguments, possibly overwriting variable declarations
+3. function declarations
+4. satisfy requirements for installer
+5. determine which "action" the user wants
+6. installation
+6.0. perform version-specific preinstall (if exists)
+6.1. perform package-based or git-based installation (git-based todo as of 2023-08-08)
+6.2. satisfy requirements for companion
+6.3. perform version-specific postinstall (if exists)
+6.4. administrate system for companion (systemd, scripts, …)
+7. cleanup
+
+
+
+# todo:
+# prep install
+# - clone companionpi repo
+# - clone companion repo
+# - install fnm and configure its use
+# parse arguments and commands
+# determine which version the user wants to be installed, fallback to latest
+# ensure prerequisites are met
+# - if v3 is in https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999
+# - todo: v2
+# - install packages
+# - 
+# install
+# configure
+# - add user
+# cleanup
+
+# todo: bail if wrong OS / machine
+
+
+'
+#======================================================================================================================
