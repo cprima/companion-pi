@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+if [ $(/usr/bin/id -u) -ne 0 ]; then
+    echo "Must be run as root"
+    exit 1
+fi
 
 #======================================================================================================================
 # CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
@@ -9,8 +13,8 @@
 # using the Elgato Stream Deck or other devices.
 #----------------------------------------------------------------------------------------------------------------------
 # Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
-#======================================================================================================================
 # Developer Notes at the bottom
+#======================================================================================================================
 
 # Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
 set -e
@@ -26,16 +30,18 @@ __ScriptArgs="$*"
 
 
 #======================================================================================================================
-#  Defaults for positional arguments.
+#  Defaults for options arguments.
+#  Options arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
 #----------------------------------------------------------------------------------------------------------------------
 # todo
 #======================================================================================================================
 
 #======================================================================================================================
-#  Defaults for install arguments.
+#  Defaults for install type arguments.
+#  Install type arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
 #----------------------------------------------------------------------------------------------------------------------
 ITYPE="stable"
-COMPANION_LATEST_VERSION="v3.0.0" #todo replace with function call
+#unused COMPANION_LATEST_VERSION="v3.0.0" #todo replace with function call
 #======================================================================================================================
 
 
@@ -49,38 +55,36 @@ COMPANION_LATEST_VERSION="v3.0.0" #todo replace with function call
 
 #======================================================================================================================
 #  Other default values.
+#  It is explicitly encouraged to use getopts below to overwrite these default values.
 #----------------------------------------------------------------------------------------------------------------------
 # Packages required to run this install script (stored as an array)
-INSTALLER_DEPS=("git" "zip" "unzip" "curl" "jq")
+COMPANIONPI_DEPS=("git" "curl" "jq") # "zip" "unzip"
 # Packages required to run Companion (stored as an array)
 COMPANION_DEPS=("libusb-1.0-0-dev" "libudev-dev" "libfontconfig1")
 # OS architectures (stored as an array)
 COMPANION_OS_ARCHS=("x64" "amd64" "arm64")
 # OS release status (stored as an array)
-COMPANION_RELEASE_STATUSES=("stable" "beta" "experimental") #or COMPANION_INSTALL_TYPES ???
+COMPANION_VALID_INSTALL_TYPES=("stable" "beta" "experimental")
 # system groups to add the companion user to (stored as an array)
 COMPANION_USER_GROUPS=("gpio" "dialout")
 ##############todo COMPANION_USER_NAME
-#
-COMPANION_COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999"
-#
+# Default URL where to fetch 
+COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999"
+# todo check if names or paths
 COMPANION_SCRIPTS_TO_SYMLINK=("companion-license" "companion-help" "companion-update" "companion-reset")
-#
+# Companion repo source and target
 COMPANION_REPO_URL="https://github.com/bitfocus/companion"
-#
 COMPANION_CLONE_FOLDER="/usr/local/src/companion"
-#
 COMPANION_REPO_BRANCH="master"
-#
+# CompanionPi repo source and target
 COMPANIONPI_REPO_URL="https://github.com/bitfocus/companion-pi"
 COMPANIONPI_REPO_URL="https://github.com/cprima/companion-pi"
 #todo env var and default value
 COMPANIONPI_REPO_BRANCH="main"
 COMPANIONPI_REPO_BRANCH="dev-cpm"
-#
 COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi"
 COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi-ng"
-#
+COMPANIONPI_CLONE_FOLDER="/mnt/d/github.com/cprima/companion-pi"
 COMPANION_INSTALL_FOLDER="/opt/companion"
 
 #
@@ -100,13 +104,11 @@ __usage() {
   Usage :  ${__ScriptName} [options] <install-type> [install-type-args]
 
   Installation types:
-    - stable               Install latest stable release. This is the default
-                           install type
-    - stable [branch]      Install latest version on a branch.????????????????????????????
-    - stable [version]     Install a specific version.
-    - beta                 Install …
-    - experimental         Install …
-    - outdated [branch]    Install …??????????????????????????????? or instead of outdated git? todo
+    - stable                   Install latest stable release. This is the default install type.
+    - stable [version]         Install a specific version.
+    - beta [version]           Install …
+    - experimental [version]   Install …
+    - git branch               Install …
 
 
   Examples:
@@ -114,14 +116,14 @@ __usage() {
     - ${__ScriptName} stable
     - ${__ScriptName} stable latest
     - ${__ScriptName} stable v3.0.0
-    - ${__ScriptName} stable v2.4.2
+    - ${__ScriptName} stable v2.4.2 #???????????????????????????????????????????? todo
     - ${__ScriptName} beta
     - ${__ScriptName} beta latest
     - ${__ScriptName} beta 3.1.0+6079-beta-df3aa2bd
     - ${__ScriptName} experimental
     - ${__ScriptName} experimental latest
     - ${__ScriptName} experimental 3.99.0+6187-develop-b7144a02
-    - ${__ScriptName} outdated stable-2.4???????????????????????????????????????? todo
+    - ${__ScriptName} git stable-2.4
 
 
   Options:
@@ -236,28 +238,38 @@ __determine_package_target() {
 : '
 __parse_semver
 
-Parses a semantic version string prefixed with "v" and returns the specified component: major, minor, or patch. 
-If no component is specified, it returns the complete version without the "v" prefix.
+Parse a semantic version string to retrieve the major, minor, patch, or pre-release label.
 
-Parameters:
-    $1 - The semantic version string prefixed with "v", e.g., "v1.2.3".
-    $2 - The component to extract (optional): "major", "minor", or "patch".
+Usage:
+    __parse_semver <version_string> [component]
 
-Return:
-    A string representing the specified component, the complete version without the "v" prefix, 
-    or an error message if the version string cannot be parsed.
+Arguments:
+    version_string: The semantic version string to parse (e.g., v1.2.3, v1.2.3-rc1).
+    component: (Optional) Specific component of the version to retrieve. 
+               Acceptable values are "major", "minor", "patch", "prerelease", or "all" (default).
 
-Example:
-    version=$(__parse_semver "v1.2.3")
-    echo "$version"  # Outputs: 1.2.3
+Returns:
+    The requested component of the version string or the entire version if "all" is specified.
+
+Examples:
+    __parse_semver v1.2.3                # Returns 1.2.3
+    __parse_semver v1.2.3 major          # Returns 1
+    __parse_semver v1.2.3-rc1 all        # Returns 1.2.3-rc1
+    __parse_semver v1.2.3-rc1 prerelease # Returns rc1
 '
-
 __parse_semver() {
     local version="$1"
     local component="${2:-all}"  # Default to 'all' if no component specified
     
     # Strip the leading 'v' prefix
     version="${version#v}"
+    
+    # Extract pre-release label if it exists
+    local pre_release_label=""
+    if [[ "$version" =~ - ]]; then
+        pre_release_label="${version#*-}"
+        version="${version%%-*}"
+    fi
     
     # Validate the version format
     if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -276,8 +288,15 @@ __parse_semver() {
         major) echo "$major" ;;
         minor) echo "$minor" ;;
         patch) echo "$patch" ;;
-        all) echo "$major.$minor.$patch" ;;
-        *) echo "Error: Invalid component. Choose between 'major', 'minor', 'patch', or leave empty for full version." ;;
+        prerelease) echo "$pre_release_label" ;; # Adding this to retrieve pre-release label
+        all) 
+            if [[ -n "$pre_release_label" ]]; then
+                echo "$major.$minor.$patch-$pre_release_label"
+            else
+                echo "$major.$minor.$patch"
+            fi
+            ;;
+        *) echo "Error: Invalid component. Choose between 'major', 'minor', 'patch', 'prerelease', or leave empty for full version." ;;
     esac
 } # ----------  end of function __parse_semver  ----------
 
@@ -318,7 +337,7 @@ __get_latest_version() {
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
-__add_user
+__create_user_with_groups
 
 Adds a user to the system with the specified username.
 #############################################group
@@ -330,10 +349,10 @@ Return:
     None. It prints messages indicating success or failure.
 
 Example:
-    __add_user "newuser"
+    __create_user_with_groups "newuser"
 '
 
-__add_user() {
+__create_user_with_groups() {
     if [ "$#" -lt 1 ]; then
         echo "Error: Username is required."
         return 1
@@ -355,15 +374,19 @@ __add_user() {
         return 3
     fi
 
-    # Add user to groups ############################################
-if [ $(getent group gpio) ]; then
-  adduser -q companion gpio
-fi
-if [ $(getent group dialout) ]; then
-  adduser -q companion dialout
-fi    
+    # Add user to groups
+    for group in "${COMPANION_USER_GROUPS[@]}"; do
+        # Check if the group exists on the system
+        if getent group "$group" > /dev/null; then
+            # Add the user to the group
+            usermod -aG "$group" "$username"
+            echo "User $username added to group $group."
+        else
+            echo "Group $group does not exist, skipping."
+        fi
+    done
 
-} # ----------  end of function __add_user  ----------
+} # ----------  end of function __create_user_with_groups  ----------
 
 
 
@@ -435,7 +458,7 @@ __install_fnm() {
     export FNM_DIR=/opt/fnm
 
     # Append the setting to root's .bashrc for persistence
-    echo "export FNM_DIR=/opt/fnm" >> /root/.bashrc
+    echo "export FNM_DIR=/opt/fnm" >> /root/.bashrc #todo
 
     # Download and install fnm
     if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /opt/fnm; then
@@ -444,6 +467,9 @@ __install_fnm() {
         echo "Error: Failed to install fnm."
         return 1
     fi
+
+    #--version-file-strategy
+
 } # ----------  end of function __install_fnm  ----------
 
 
@@ -574,19 +600,19 @@ __download_and_extract_package() {
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 
 : '
-__append_to_path
+__append_in_bashrc_to_path
 
 Append a directory to the PATH variable in ~/.bashrc if not already present.
 
 Usage:
-    append_to_path /path/to/directory
+    __append_in_bashrc_to_path /path/to/directory
 
 Parameters:
     $1: The directory path to add to the PATH.
 
 Example:
 # Example usage:
-# __append_to_path "/path/to/directory"
+# __append_in_bashrc_to_path "/path/to/directory"
 
 Description:
     This function checks if the provided directory path is already present in the 
@@ -595,7 +621,7 @@ Description:
     indicating the same is displayed.
 '
 
-__append_to_path() {
+__append_in_bashrc_to_path() {
 
     local new_dir="$1"
     
@@ -609,7 +635,7 @@ __append_to_path() {
     fi
 }
 
-# ----------  end of function __append_to_path  ----------
+# ----------  end of function __append_in_bashrc_to_path  ----------
 
 
 
@@ -670,21 +696,20 @@ install_update_prompt() {
 # Declare global variable
 #########COMPANION_SCRIPTS_TO_SYMLINK=("companion-license" "companion-help" "companion-update" "companion-reset")
 
-create_symlinks() {
-    : '
-    Create symbolic links for all scripts in the COMPANION_SCRIPTS_TO_SYMLINK array.
+: '
+Create symbolic links for all scripts in the COMPANION_SCRIPTS_TO_SYMLINK array.
 
-    Usage:
-        create_symlinks [source_directory]
+Usage:
+    create_symlinks [source_directory]
 
-    Parameters:
-        source_directory: Optional. The directory containing the scripts to be linked. Defaults to "/usr/local/src/companionpi".
+Parameters:
+    source_directory: Optional. The directory containing the scripts to be linked. Defaults to "/usr/local/src/companionpi".
 
-    Description:
-        This function iterates over the global COMPANION_SCRIPTS_TO_SYMLINK array and creates symbolic links 
-        from the specified source directory (or the default if none is provided) to the /usr/local/bin/ directory for each script.
-    '
-    
+Description:
+    This function iterates over the global COMPANION_SCRIPTS_TO_SYMLINK array and creates symbolic links 
+    from the specified source directory (or the default if none is provided) to the /usr/local/bin/ directory for each script.
+'
+__create_symlinks() {
     local src_dir="${1:-/usr/local/src/companionpi}"
     
     for script in "${COMPANION_SCRIPTS_TO_SYMLINK[@]}"; do
@@ -701,7 +726,7 @@ create_symlinks() {
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-create_motd_symlink() {
+__create_motd_symlink() {
     : '
     Create a symbolic link for the motd file.
 
@@ -728,6 +753,130 @@ create_motd_symlink() {
 
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+: '
+Sets up the Node environment using `fnm` based on the `.node-version` file 
+present in the COMPANION_INSTALL_FOLDER. Also updates the PATH to include 
+the associated Node binaries.
+
+Globals:
+    COMPANION_INSTALL_FOLDER (str): Path to the Companion installation folder.
+
+Arguments:
+    None.
+
+Returns:
+    None.
+'
+setup_node_with_fnm() {
+    local node_version
+    export PATH=$FNM_DIR:$PATH
+    eval "$(fnm env --shell bash)"
+
+    # Navigate to the installation folder
+    cd "${COMPANION_INSTALL_FOLDER}" || {
+        echo "Error: Failed to change directory to ${COMPANION_INSTALL_FOLDER}"
+        return 1
+    }
+
+    # Display the Node version from .node-version file
+    cat .node-version
+
+    # Use fnm to set up Node based on .node-version, and install if missing
+    fnm use --install-if-missing --silent-if-unchanged
+
+    # Create an alias for the current Node version
+    # Enables use of: export PATH=/opt/fnm/aliases/companion/bin:$PATH
+    fnm alias "$(fnm current)" companion
+
+    # Update PATH to include the Node binaries
+    export PATH="${FNM_DIR}/aliases/companion/bin:$PATH"
+}
+
+# ----------  end of function __is_version_lt_2_4_2  ----------
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+: '
+__fetch_latest_uri
+
+Fetch the latest URI for a given API URL and version.
+
+Parameters:
+$1: COMPANION_API_URL - The API URL to fetch data from.
+$2: IVERSION - The version of interest.
+
+Returns:
+The latest URI matching the provided version.
+
+Prerequisites:
+Assumes the availability of the __determine_package_target and __parse_semver functions.
+'
+__fetch_latest_uri() {
+    #local COMPANION_API_URL="$1"
+    #local IVERSION="$2"
+    
+    local URI
+    URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
+    
+    echo "$URI"
+}
+
+# ----------  end of function __is_version_lt_2_4_2  ----------
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+__copy_semantic_versioned_file() {
+    : '
+    Copy a file based on semantic versioning from subfolders.
+
+    Usage:
+        copy_semantic_versioned_file SEMANTIC_VERSION GIT_REPO_URL
+
+    Globals:
+        COMPANIONPI_CLONE_FOLDER: todo
+
+    Parameters:
+        SEMANTIC_VERSION: The version for which the file should be checked and copied.
+        FILE: 
+        TARGETFOLDER: 
+
+    Description:
+        This function will clone the given git repository and then look for a file in subfolders 
+        named by semantic versioning. It will try to copy the file based on the given version, 
+        and if not found, it will step up the version hierarchy until it finds the file.
+        
+# Example usage:
+# copy_semantic_versioned_file "2.4.2" "myfile.txt" "/tmp"
+    '
+    
+    local version="$1"
+    local major=$(__parse_semver "$version" "major")
+    local minor=$(__parse_semver "$version" "minor")
+    local patch=$(__parse_semver "$version" "patch")
+    local file="$2"
+    local targetfolder="$2"
+
+    # Clone the repo and cd into it
+    #git clone "$repo_url" cloned_repo
+    cd ${COMPANIONPI_CLONE_FOLDER}
+
+    # Check and copy the file based on version hierarchy
+    if [[ -f "./files/v${major}.${minor}.${patch}/${file}" ]]; then
+        cp "./files/v${major}.${minor}.${patch}/${file}" "${targetfolder}"
+    elif [[ -f "./files/v${major}.${minor}/${file}" ]]; then
+        cp "./files/v${major}.${minor}/${file}" "${targetfolder}"
+    else
+        cp "./files/v${major}/${file}" "${targetfolder}"
+    fi
+
+}
+
+
+# ----------  end of function __is_version_lt_2_4_2  ----------
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+
+# ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 
@@ -804,6 +953,38 @@ install_packaged() {
 # ----------  end of function install_packaged  ----------
 
 
+
+main_v3() {
+    local URI=$(__fetch_latest_uri)
+    # the following code depends on some packages, like git or jq.
+    #__install_apt_packages "${COMPANIONPI_DEPS[@]}"
+
+    # get installer repo and software repo into /usr/local/src/ 
+    #__clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
+    #__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
+
+    # The Fast and simple Node.js version Manager, instructed to work on the file .node-version
+    #__install_fnm
+    if [[ "$URI" && "$URI" != "null" ]]; then
+        #__download_and_extract_package "$(__fetch_latest_uri)"
+        setup_node_with_fnm
+        cd ${COMPANION_INSTALL_FOLDER}
+        echo $PATH
+        npm --unsafe-perm install -g yarn #&>/dev/null #todo errorhandlign
+        #__install_apt_packages "${COMPANION_DEPS[@]}"
+        #__copy_semantic_versioned_file "${IVERSION}" "companion.service" "/etc/systemd/system"
+        #systemctl daemon-reload
+        __create_symlinks
+        __create_motd_symlink
+        #systemctl enable companion
+
+    else
+        echo "No matching package found for target: $(__determine_package_target $(__parse_semver "${IVERSION}" "major")) and version: $IVERSION"
+        exit 1
+    fi
+}
+
+
 #==end functions=======================================================================================================
 #======================================================================================================================
 #======================================================================================================================
@@ -815,17 +996,6 @@ install_packaged() {
 
 
 
-# the following code depends on some packages, like git or jq.
-__install_apt_packages "${INSTALLER_DEPS[@]}"
-
-__clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
-__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
-
-__install_fnm
-export PATH=/opt/fnm:$PATH #todo use global variable
-eval "$(fnm env --shell bash)"
-
-
 
 
 
@@ -833,59 +1003,45 @@ eval "$(fnm env --shell bash)"
 #  Based on how this script is called: What is to do?
 #----------------------------------------------------------------------------------------------------------------------
 
-# Define installation type
+# Determine installation-type from the argument
 if [ "$#" -gt 0 ];then
     ITYPE=$1
     shift
 fi
-if [ "$(echo "$ITYPE" | grep -E '(stable|beta|experimental)')" = "" ]; then #todo check against array
-#
-# is_valid_type=0
-# for type in "${VALID_TYPES[@]}"; do
-#     if [[ "$ITYPE" == "$type" ]]; then
-#         is_valid_type=1
-#         break
-#     fi
-# done
 
-# # Use the result of the check in a condition
-# if [[ "$is_valid_type" -eq 0 ]]; then
-#     echo "Invalid ITYPE value."
-#     # Handle the invalid case here
-# fi
-#
-    echo "Installation type \"$ITYPE\" is not known..."
+# do we have a supported value for $ITYPE?
+# looping the array for match (verbose but intuitive)
+is_valid_type=0
+for type in "${COMPANION_VALID_INSTALL_TYPES[@]}"; do
+    if [[ "$ITYPE" == "$type" ]]; then
+        is_valid_type=1
+        break
+    fi
+done
+# Use the result of the check in a condition
+if [[ "$is_valid_type" -eq 0 ]]; then
+    echo "Invalid ITYPE value."
+    # Handle the invalid case here
     exit 1
 fi
-#----------------------------------------------------------------------------------------------------------------------
-if [ "$ITYPE" = "stable" ]; then
-    COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
-    if [ "$#" -eq 0 ];then
-        IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
-    else
-        IVERSION="$1"
-        shift
-    fi
-#----------------------------------------------------------------------------------------------------------------------
-elif [ "$ITYPE" = "beta" ]; then
-    COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
-    if [ "$#" -eq 0 ];then
-        IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
-    else
-        IVERSION="$1"
-        shift
-    fi
-#----------------------------------------------------------------------------------------------------------------------
-elif [ "$ITYPE" = "experimental" ]; then
-    COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
-    if [ "$#" -eq 0 ];then
-        IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
-    else
-        IVERSION="$1"
-        shift
-    fi
+
+# # placeholder for explicit code
+# if [ "$ITYPE" = "stable" ]; then
+# :
+# elif [ "$ITYPE" = "beta" ]; then
+# :
+# elif [ "$ITYPE" = "experimental" ]; then
+# :
+# fi
+
+# If no version is given get the latest from COMPANION_API_URL as per .published timestamp
+if [ "$#" -eq 0 ];then
+    IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
+else
+    IVERSION="$1"
+    shift
 fi
-#----------------------------------------------------------------------------------------------------------------------
+
 # Check for any unparsed arguments. Should be an error.
 if [ "$#" -gt 0 ]; then
     __usage
@@ -893,41 +1049,28 @@ if [ "$#" -gt 0 ]; then
     echo "Too many arguments."
     exit 1
 fi
-#----------------------------------------------------------------------------------------------------------------------
-# …
-#======================================================================================================================
+
+# updating the global variable
+COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
+
+target="$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"
+
+echo $COMPANION_API_URL
+echo "${IVERSION}"
+echo "$ITYPE"
+echo "target: ${target}"
+
+__copy_semantic_versioned_file "${IVERSION}" ".gitkeep" "/tmp"
 
 
-
-# latest_version=$(__get_latest_version "https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999" "linux-arm64-tgz")
-# echo "latest_version: $latest_version"
-
-
-
-# target="$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"
-# echo "target: ${target}"
-
-
-
-
-if __is_version_lt_2_4_2 "${IVERSION}"; then
-    echo "Version ${IVERSION} does not meet the specified criteria."
-    #todo make work for stable-2.* branches
-else
-    URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
-    # Check if empty
-    if [[ "$URI" && "$URI" != "null" ]]; then
-        ################install_packaged
-        echo " Going to download ${URI}"
-        __download_and_extract_package ${URI} #todo work in IVERSION and APIURL and target
-        cd ${COMPANION_INSTALL_FOLDER}
-        pwd
-        cat .node-version
-        fnm use --install-if-missing --silent-if-unchanged
-        #########todo fnm default
-        npm --unsafe-perm install -g yarn &>/dev/null
+# If this script is run, but not sourced:
+if [[ $0 == "$BASH_SOURCE" ]]; then
+    if __is_version_lt_2_4_2 "${IVERSION}"; then
+        echo "Version ${IVERSION} does not meet the specified criteria."
+        exit 1
+        #todo make work for stable-2.* branches
     else
-        echo "No matching package found for target: $target and version: $IVERSION"
+        main_v3
     fi
 fi
 
@@ -936,58 +1079,26 @@ fi
 
 
 
-
-
-exit 0
-
-__install_apt_packages "${COMPANION_DEPS[@]}"
-
 exit 0
 
 
 
 
-CURRENT_ARCH=$(dpkg --print-architecture)
-if [[ "$CURRENT_ARCH" != "x64" && "$CURRENT_ARCH" != "amd64" && "$CURRENT_ARCH" != "arm64" ]]; then
-    echo "$CURRENT_ARCH is not a supported cpu architecture for running Companion."
-    echo "If you are running on an arm device (such as a Raspberry Pi), make sure to use an arm64 image."
-    exit 1
-fi
 
-echo "This will attempt to install Companion as a system service on this device."
-echo "It is designed to be run on headless servers, but can be used on desktop machines if you are happy to not have the tray icon."
-echo "A user called 'companion' will be created to run the service, and various scripts will be installed to manage the service"
 
-if [ $(/usr/bin/id -u) -ne 0 ]; then
-    echo "Must be run as root"
-    exit 1
-fi
 
-# Install a specific stable build. It is advised to not use this, as attempting to install a build that doesn't
-# exist can leave your system in a broken state that needs fixing manually
-COMPANION_BUILD="${COMPANION_BUILD:-beta}"
-# Development only: Allow building using a testing branch of this updater
-COMPANIONPI_BRANCH="${COMPANIONPI_BRANCH:-main}"
 
-# add a system user
-adduser --disabled-password companion --gecos ""
 
-# install some dependencies
-apt-get update
-apt-get install -y git zip unzip curl libusb-1.0-0-dev libudev-dev
-apt-get clean
 
-# install fnm to manage node version
-# we do this to /opt/fnm, so that the companion user can use the same installation
-export FNM_DIR=/opt/fnm
-echo "export FNM_DIR=/opt/fnm" >> /root/.bashrc
-curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /opt/fnm
-export PATH=/opt/fnm:$PATH
-eval "`fnm env --shell bash`"
 
-# clone the companionpi repository
-git clone https://github.com/bitfocus/companion-pi.git -b $COMPANIONPI_BRANCH /usr/local/src/companionpi
-cd /usr/local/src/companionpi
+
+
+
+
+
+
+
+
 
 # configure git for future updates
 git config --global pull.rebase false
@@ -1040,19 +1151,19 @@ Anatomy of this script:
 1. variable declarations
 2. parse arguments, possibly overwriting variable declarations
 3. function declarations
-4. satisfy requirements for installer
+4. satisfy requirements for installer (incl. root)
 5. determine which "action" the user wants
 6. installation
 6.0. perform version-specific preinstall (if exists)
 6.1. perform package-based or git-based installation (git-based todo as of 2023-08-08)
 6.2. satisfy requirements for companion
 6.3. perform version-specific postinstall (if exists)
-6.4. administrate system for companion (systemd, scripts, …)
+6.4. administrate system for companion (systemd, launch, helper scripts, …)
 7. cleanup
 
 
 
-# todo:
+# outline:
 # prep install
 # - clone companionpi repo
 # - clone companion repo
