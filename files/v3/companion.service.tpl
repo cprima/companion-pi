@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=companion
 Environment=COMPANION_IN_SYSTEMD=1
-ExecStart=/usr/local/src/companionpi/launch.sh
+ExecStart={{INSTALL_FOLDER}}/node-runtime/bin/node {{INSTALL_FOLDER}}/main.js --extra-module-path {{EXTRA_MODULE_PATH}} --admin-address {{ADMIN_ADDRESS}} --admin-port {{ADMIN_PORT}}
 Restart=on-failure
 KillSignal=SIGINT
 TimeoutStopSec=60

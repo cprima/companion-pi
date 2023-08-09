@@ -8,7 +8,7 @@
 #  Bitfocus Companion enables users to control a wide range of professional broadcast equipment and software
 #  using the Elgato Stream Deck or other devices.
 #----------------------------------------------------------------------------------------------------------------------
-#  Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
+#  Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- -k stable v3.0.0 #todo check and test
 #  Developer Notes at the bottom
 #######################################################################################################################
 
@@ -122,6 +122,12 @@ COMPANION_PACKAGE_TARGET=""
 #to check if emtpy a good idea #todo check if chekd for emtpy
 # @see: if [[ "$COMPANION_PACKAGE_URL" && "$COMPANION_PACKAGE_URL" != "null" ]]; then
 COMPANION_PACKAGE_URL=""
+#
+COMPANION_EXTRA_MODULE_PATH="/opt/companion-module-dev"
+#
+COMPANION_ADMIN_ADDRESS="0.0.0.0"
+#
+COMPANION_ADMIN_PORT="8000"
 
 # fnm read the environment variable as its base-dir for the root directory of fnm installations
 FNM_DIR=/opt/fnm
@@ -437,6 +443,115 @@ __copy_semantic_versioned_file() {
     fi
 
 } # ----------  end of __copy_semantic_versioned_file  ----------
+
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
+: '
+__sanitize_for_sed
+
+Description:
+  Safely prepares a string for use within a `sed` substitution by 
+  escaping characters that have special meaning in the `sed` context.
+
+Parameters:
+  $1: str - The string to be sanitized.
+
+Returns:
+  Echoes a sanitized version of the input string, safe for `sed` substitution.
+
+Example:
+  sanitized_string=$(sanitize_for_sed "some/input/string")
+'
+__sanitize_for_sed() {
+    local str="$1"
+    # Escape backslashes, forward slashes, and the ampersand
+    echo "$str" | sed -e 's/[\/&]/\\&/g'
+} # ----------  end of __sanitize_for_sed  ----------
+
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
+: '
+__replace_placeholders
+
+Description:
+  Replaces placeholders in a file with given values.
+
+Parameters:
+  $1: Path to the template file containing placeholders (with .tpl extension).
+  $2: Associative array containing placeholder-value pairs.
+
+Returns:
+  None. Creates a new file with the replaced values and without the .tpl extension.
+
+Example:
+  declare -A placeholder_values
+  placeholder_values=( ["PLACEHOLDER1"]="value1" ["PLACEHOLDER2"]="value2" )
+  __replace_placeholders "/path/to/config/file.tpl" placeholder_values
+'
+__replace_placeholders() {
+    local template_path="$1"
+    declare -n placeholder_map="$2"
+
+    local output_path="${template_path%.tpl}"
+
+    cd ${COMPANIONPI_CLONE_FOLDER}
+    cp "$template_path" "$output_path"
+
+    for placeholder in "${!placeholder_map[@]}"; do
+        local sanitized_value
+        sanitized_value=$(__sanitize_for_sed "${placeholder_map[$placeholder]}")
+        sed -i "s|${placeholder}|${sanitized_value}|g" "$output_path"
+    done
+    cd - >/dev/null
+}
+ # ----------  end of __replace_placeholders  ----------
+
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
+: '
+__replace_placeholders_in_semantic_versioned_file
+
+Description:
+  Replaces placeholders in a file with given values.
+
+Parameters:
+  $1: Path to the template file containing placeholders (with .tpl extension).
+  $2: Associative array containing placeholder-value pairs.
+
+Returns:
+  None. Creates a new file with the replaced values and without the .tpl extension.
+
+Example:
+  declare -A placeholder_values
+  placeholder_values=( ["PLACEHOLDER1"]="value1" ["PLACEHOLDER2"]="value2" )
+  __replace_placeholders_in_semantic_versioned_file "v3.0.0" "file.tpl" placeholder_values
+'
+__replace_placeholders_in_semantic_versioned_file() { 
+    local version="$1"
+    local file="$2"
+    local placeholder_map="$3"
+    local major
+    local minor
+    local patch
+
+    major=$(__parse_semver "$version" "major")
+    minor=$(__parse_semver "$version" "minor")
+    patch=$(__parse_semver "$version" "patch")
+
+    cd ${COMPANIONPI_CLONE_FOLDER}
+
+    # Check and replace in the template file based on version hierarchy
+    if [[ -f "./files/v${major}.${minor}.${patch}/${file}" ]]; then
+        __replace_placeholders "./files/v${major}.${minor}.${patch}/${file}" "${placeholder_map}"
+    elif [[ -f "./files/v${major}.${minor}/${file}" ]]; then
+        __replace_placeholders "./files/v${major}.${minor}/${file}" "${placeholder_map}"
+    elif [[ -f "./files/v${major}/${file}" ]]; then
+        __replace_placeholders "./files/v${major}/${file}" "${placeholder_map}"
+    #todo elif no ./files/${file} exit with error
+    else
+        __replace_placeholders "./files/${file}" "${placeholder_map}"
+    fi
+
+    cd - >/dev/null
+}
+ # ----------  end of __replace_placeholders_in_semantic_versioned_file  ----------
 
 
 #====================================================================================================================3=
@@ -969,6 +1084,15 @@ install_packaged_v3() {
         fi
         npm --unsafe-perm install -g yarn &>/dev/null #will install to /opt/fnm/aliases/companion/bin/yarn
         __install_apt_packages "${COMPANION_DEPS[@]}"
+
+        local -A placeholders
+        placeholders=(
+            ["{{EXTRA_MODULE_PATH}}"]="${COMPANION_EXTRA_MODULE_PATH}"
+            ["{{ADMIN_ADDRESS}}"]="${COMPANION_ADMIN_ADDRESS}"
+            ["{{ADMIN_PORT}}"]="${COMPANION_ADMIN_PORT}"
+            ["{{INSTALL_FOLDER}}"]="${COMPANION_INSTALL_FOLDER}"
+        )
+        __replace_placeholders_in_semantic_versioned_file "${COMPANIONPI_INSTALLATION_VERSION}" "companion.service.tpl" placeholders
         __copy_semantic_versioned_file "${COMPANIONPI_INSTALLATION_VERSION}" "companion.service" "/etc/systemd/system"
         #systemctl daemon-reload
         #systemctl enable companion
@@ -1203,6 +1327,9 @@ ToDo
 - revise exit codes
 - add fnm alias to PATH for companion user (in his .bashrc)
 - review use of prefix _ and __, explain it in styleguide
+- check if every copy and symlink wil be successful. Prepare templated files before __download_and_extract_package?
+- check if default values could go into systemd service file companion.service
+- …
 
 
 # add the fnm node to this users path
