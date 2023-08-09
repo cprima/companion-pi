@@ -1216,8 +1216,10 @@ _log "COMPANION_PACKAGE_TARGET: ${COMPANION_PACKAGE_TARGET}"
 _log "COMPANION_API_PACKAGES_URL: ${COMPANION_API_PACKAGES_URL}"
 _log "COMPANION_PACKAGE_URL: ${COMPANION_PACKAGE_URL}"
 _log "COMPANION_INSTALL_FOLDER: ${COMPANION_INSTALL_FOLDER}"
-if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then _log "_DELETE_DOWNLOADED_FILES: downloaded files will be deleted"; else _log "_DELETE_DOWNLOADED_FILES: downloaded files will NOT be deleted"; fi
-if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then _log "_KEEP_TEMP_FILES: temp files will NOT be deleted"; else _log "_KEEP_TEMP_FILES: temp files will be deleted"; fi
+_log "_DELETE_DOWNLOADED_FILES: downloaded files will $( [ "$_DELETE_DOWNLOADED_FILES" -eq "${_TRUE}" ] && echo "be" || echo "NOT be" ) deleted"
+#if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then _log "_DELETE_DOWNLOADED_FILES: downloaded files will be deleted"; else _log "_DELETE_DOWNLOADED_FILES: downloaded files will NOT be deleted"; fi
+_log "_KEEP_TEMP_FILES: temp files will $( [ "$_KEEP_TEMP_FILES" -eq "${_TRUE}" ] && echo "NOT be" || echo "be" ) deleted"
+#if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then _log "_KEEP_TEMP_FILES: temp files will NOT be deleted"; else _log "_KEEP_TEMP_FILES: temp files will be deleted"; fi
 
 echo "Step 5 finished."
 
@@ -1329,6 +1331,8 @@ ToDo
 - review use of prefix _ and __, explain it in styleguide
 - check if every copy and symlink wil be successful. Prepare templated files before __download_and_extract_package?
 - check if default values could go into systemd service file companion.service
+- systemd must use node from fnm
+- use more _log
 - …
 
 
