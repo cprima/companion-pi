@@ -19,9 +19,10 @@ exit_handler() {
     local exit_code="$?"
     if [ "$exit_code" -ne 0 ]; then
         echo "Error occurred in script. Last command exited with: $exit_code"
+        cat "$_LOGFILE"
     fi
-    echo "===== Displaying Log =====" #todo formatting
-    cat "$_LOGFILE"
+    # echo "===== Displaying Log =====" #todo formatting
+    # cat "$_LOGFILE"
 }
 # Bash will execute error_handler when receiving the signal EXIT
 trap exit_handler EXIT
@@ -1000,7 +1001,7 @@ echo "Step 3 finished."
 echo -e "\n${_GREEN}Step 4: Satisfy requirements for installer script${_NC}"
 
 # Clean up the log file if it already exists
-> "$_LOGFILE"
+echo -n "" > "$_LOGFILE"
 
 if [ "$(/usr/bin/id -u)" -ne 0 ]; then
     echo "Must be run as root"
@@ -1082,7 +1083,7 @@ fi
 # updating the global variable
 COMPANION_API_PACKAGES_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${COMPANIONPI_INSTALLATION_TYPE}&limit=999"
 
-COMPANION_PACKAGE_TARGET="$(__determine_package_target $(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major"))"
+COMPANION_PACKAGE_TARGET="$(__determine_package_target "$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major")")"
 COMPANION_PACKAGE_URL="$(__fetch_latest_uri)"
 
 _log "COMPANIONPI_INSTALLATION_TYPE: ${COMPANIONPI_INSTALLATION_TYPE}"
@@ -1142,46 +1143,36 @@ echo "Step 6 finished."
 #todo
 #echo -e "\n$_BOLD ----- cleanup$_NB"
 
-cat ${_LOGFILE} #todo remove this for prod
+echo -e "\n${_GREEN}Step 7: Review.${_NC}"
+
+read -p "Do you want to see th logfile (y/n)? " -n 1 -r
+echo    # (optional) move to a new line
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+  cat ${_LOGFILE} #todo remove this for prod
+fi
+# if [[ ! $REPLY =~ ^[Yy]$ ]]
+# then
+#     exit 1
+# fi
+
 
 #echo "Step 7 finished."
 
 #--------------------------------------------------------------------------------------------------------------------7-
-# End of Step 67: Installation
+# End of Step 7: Installation
 #####################################################################################################################7#
 
 
 
 echo -e "\n${_GREEN}Finished.${_NC}\n\n"
 
-
 exit 0
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-exit 0
-
-
-######################################################################################
-
-
-exit 0
-
-
+#######################################################################################################################
+#  Appendix
 #======================================================================================================================
 #  Developer Notes
 #----------------------------------------------------------------------------------------------------------------------
@@ -1211,6 +1202,7 @@ ToDo
 - for each call to exit, check if return should be called. And how it relates to set -e
 - revise exit codes
 - add fnm alias to PATH for companion user (in his .bashrc)
+- review use of prefix _ and __, explain it in styleguide
 
 
 # add the fnm node to this users path
