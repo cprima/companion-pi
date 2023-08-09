@@ -2,14 +2,14 @@
 # shellcheck disable=SC2016
 
 #######################################################################################################################
-# CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
-# Copyright (c) …
-# Licensed under the MIT License. See LICENSE file in the project root for full license information.
-# Bitfocus Companion enables users to control a wide range of professional broadcast equipment and software
-# using the Elgato Stream Deck or other devices.
+#  CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
+#  Copyright (c) …
+#  Licensed under the MIT License. See LICENSE file in the project root for full license information.
+#  Bitfocus Companion enables users to control a wide range of professional broadcast equipment and software
+#  using the Elgato Stream Deck or other devices.
 #----------------------------------------------------------------------------------------------------------------------
-# Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
-# Developer Notes at the bottom
+#  Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
+#  Developer Notes at the bottom
 #######################################################################################################################
 
 # Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
@@ -30,9 +30,10 @@ set -o nounset
 
 
 #######################################################################################################################
-#  Variable declarations
+#  Step 1: Variable declarations
 #----------------------------------------------------------------------------------------------------------------------
-echo -e "\n\e[1m ----- Variable declarations\e[0m"
+
+echo -e "\n\033[0;32mStep 1: Variable declarations\033[0m"
 
 #todo check use
 __ScriptVersion="v0.1.0"
@@ -47,7 +48,7 @@ _FALSE=0
 #  Defaults for options arguments.
 #  Options arguments as in ${__ScriptName} [options] <install-type> [install-arguments]
 #----------------------------------------------------------------------------------------------------------------------
-# todo
+#  todo
 #======================================================================================================================
 
 
@@ -64,9 +65,9 @@ COMPANIONPI_INSTALLATION_VERSION="v3.0.0"  #could be a branch name!
 #======================================================================================================================
 #  Environment variables taken into account.
 #----------------------------------------------------------------------------------------------------------------------
-# todo
-#   COMPANION_BUILD:          Install a specific stable build
-#   COMPANIONPI_BRANCH:       Development only: Allow building using a testing branch of this updater
+#  todo
+#  COMPANION_BUILD:          Install a specific stable build
+#  COMPANIONPI_BRANCH:       Development only: Allow building using a testing branch of this updater
 #======================================================================================================================
 
 
@@ -122,24 +123,33 @@ COMPANION_PACKAGE_URL=""
 FNM_DIR=/opt/fnm
 export FNM_DIR=${FNM_DIR}
 
+# use like this: echo -e "${RED}Error:${NC} File not found!"
+_GREEN='\033[0;32m'
+_RED='\033[0;31m'
+_NC='\033[0m' # No Color
+_BOLD='\e[1m'
+_NB='\e[0m' # No Bold
+
+echo "Step 1 finished."
+
 #----------------------------------------------------------------------------------------------------------------------
-# End of variable declarations
+#  End of step 1: Variable declarations
 #######################################################################################################################
 
 
 
-#######################################################################################################################
-#  Parse arguments, possibly overwriting variable declarations
-#----------------------------------------------------------------------------------------------------------------------
+#####################################################################################################################2#
+#  Step 2: Parse arguments, possibly overwriting variable declarations
+#--------------------------------------------------------------------------------------------------------------------2-
 
-echo -e "\n\e[1m ----- Going to parse arguments, possibly overwriting variable declarations\e[0m"
+echo -e "\n${_GREEN}Step 2: Going to parse arguments, possibly overwriting variable declarations${_NC}"
 
 # todo fix this to docstring:
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------2-
 #         NAME:  __usage
 #  DESCRIPTION:  Display usage information. Needs to be declared before getopts call.
 #                Early declaration for use in getopts. Also some prominently visible initial documentation.
-#----------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------2-
 
 __usage() {
     cat << EOT
@@ -178,11 +188,11 @@ EOT
 }   # ----------  end of function __usage  ----------
 
 
-#======================================================================================================================
+#====================================================================================================================2=
 # parse positional parameters from [options]
 # Options arguments as in ${__ScriptName} [options] <install-type> [install-arguments]
 # may overwrite default variable values
-#----------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------2-
 
 while getopts ':hktv' opt
 do
@@ -204,18 +214,27 @@ done
 # after this, $1 will refer to the first non-option argument passed to the script
 shift "$((OPTIND-1))"
 
-#######################################################################################################################
-#  Function declarations
+echo "Step 2 finished."
+
 #----------------------------------------------------------------------------------------------------------------------
-echo -e "\n\e[1m ----- function declarations\e[0m"
+#  End of step 2: Parse arguments, possibly overwriting variable declarations
+#######################################################################################################################
 
 
-#======================================================================================================================
-#--helper functions----------------------------------------------------------------------------------------------------
-#======================================================================================================================
+
+#####################################################################################################################3#
+#  Step 3: Function declarations
+#--------------------------------------------------------------------------------------------------------------------3-
+
+echo -e "\n${_GREEN}Step 3: Function declarations${_NC}"
 
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#====================================================================================================================3=
+#--helper functions--------------------------------------------------------------------------------------------------3-
+#====================================================================================================================3=
+
+
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __parse_semver
 
@@ -282,7 +301,7 @@ __parse_semver() {
 } # ----------  end of function __parse_semver  ----------
 
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __is_version_lt_2_4_2
 
@@ -320,7 +339,7 @@ __is_version_lt_2_4_2() {
     fi
 } # ----------  end of function __is_version_lt_2_4_2  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __append_in_bashrc_to_path
 
@@ -358,7 +377,7 @@ __append_in_bashrc_to_path() {
 
 # ----------  end of function __append_in_bashrc_to_path  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __copy_semantic_versioned_file
 
@@ -411,12 +430,12 @@ __copy_semantic_versioned_file() {
 } # ----------  end of __copy_semantic_versioned_file  ----------
 
 
-#======================================================================================================================
-#--installer functions-------------------------------------------------------------------------------------------------
-#======================================================================================================================
+#====================================================================================================================3=
+#--installer functions-----------------------------------------------------------------------------------------------3-
+#====================================================================================================================3=
 
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __determine_package_target
 
@@ -483,7 +502,7 @@ __determine_package_target() {
 
 }   # ----------  end of function __determine_package_target  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __get_latest_version
 
@@ -513,7 +532,7 @@ __get_latest_version() {
     echo "$version"
 } # ----------  end of function __get_latest_version  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __create_user_with_groups
 
@@ -566,7 +585,7 @@ __create_user_with_groups() {
 
 } # ----------  end of function __create_user_with_groups  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __install_apt_packages
 
@@ -609,7 +628,7 @@ __install_apt_packages() {
     fi
 } # ----------  end of function __install_apt_packages  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __install_fnm
 
@@ -647,7 +666,7 @@ __install_fnm() {
 
 } # ----------  end of function __install_fnm  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __clone_or_update_repo
 
@@ -690,7 +709,7 @@ __clone_or_update_repo() {
     fi
 } # ----------  end of function __clone_or_update_repo  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __download_and_extract_package
 
@@ -740,7 +759,7 @@ __download_and_extract_package() {
 
 } # ----------  end of function __download_and_extract_package  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __install_update_prompt()
 
@@ -773,7 +792,7 @@ __install_update_prompt() {
     yarn --cwd "$cwd" --silent install
 }
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 # Declare global variable
 #########COMPANION_SCRIPTS_TO_SYMLINK=("companion-license" "companion-help" "companion-update" "companion-reset")
 
@@ -808,7 +827,7 @@ __create_symlinks() {
     done
 } # ----------  end of function __create_symlinks  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 Create a symbolic link for the motd file.
 
@@ -834,7 +853,7 @@ __create_motd_symlink() {
     ln -s -f "$src_dir/motd" "/etc/motd"
 } # ----------  end of function __create_motd_symlink  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __setup_node_with_fnm
 
@@ -878,7 +897,7 @@ __setup_node_with_fnm() {
 
 } # ----------  end of function __setup_node_with_fnm  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
 __fetch_latest_uri
 
@@ -907,21 +926,21 @@ __fetch_latest_uri() {
     echo "$URI"
 } # ----------  end of function __fetch_latest_uri  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 #todo explain
 preinstall_3.0.0() {
     echo "~~PRE~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
 # ----------  end of preinstall_3.0.0  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 #todo explain
 postinstall_3.0.0() {
     echo "~~POST~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
 # ----------  end of function postinstall_3.0.0  ----------
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 #######################################################????????????????todo
 install_packaged_v3() {
 
@@ -958,16 +977,19 @@ install_packaged_v3() {
     fi
 } # ----------  end of function install_packaged  ----------
 
-#----------------------------------------------------------------------------------------------------------------------
-#  End of function declarations
-#######################################################################################################################
+echo "Step 3 finished."
+
+#--------------------------------------------------------------------------------------------------------------------3-
+#  End of Step 3: Function declarations
+#####################################################################################################################3#
 
 
 
-#######################################################################################################################
-#  Satisfy requirements for this installer script
-#----------------------------------------------------------------------------------------------------------------------
-echo -e "\n\e[1m ----- satisfy requirements for installer script\e[0m"
+#####################################################################################################################4#
+#  Step 4: Satisfy requirements for this installer script
+#--------------------------------------------------------------------------------------------------------------------4-
+
+echo -e "\n${_GREEN}Step 4: Satisfy requirements for installer script${_NC}"
 
 if [ "$(/usr/bin/id -u)" -ne 0 ]; then
     echo "Must be run as root"
@@ -985,17 +1007,19 @@ __clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${CO
 __install_fnm
 
 
-#----------------------------------------------------------------------------------------------------------------------
-# End of satisfy requirements for this installer script
-#######################################################################################################################
+echo "Step 4 finished."
+
+#--------------------------------------------------------------------------------------------------------------------4-
+# End of Step 4: Satisfy requirements for this installer script
+#####################################################################################################################4#
 
 
 
-#######################################################################################################################
-#  Determine machine, environment, installation type and version-to-install
-#----------------------------------------------------------------------------------------------------------------------
+#####################################################################################################################5#
+#  Step 5: Determine machine, environment, installation type and version-to-install
+#--------------------------------------------------------------------------------------------------------------------5-
 
-echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
+echo -e "\n${_GREEN}Step 5: Determine machine, environment, installation type and version-to-install${_NC}"
 
 # Determine installation-type from the argument
 if [ "$#" -gt 0 ];then
@@ -1059,17 +1083,19 @@ echo "COMPANION_INSTALL_FOLDER: ${COMPANION_INSTALL_FOLDER}"
 if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then echo "_DELETE_DOWNLOADED_FILES: downloaded files will be deleted"; else echo "_DELETE_DOWNLOADED_FILES: downloaded files will NOT be deleted"; fi
 if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then echo "_KEEP_TEMP_FILES: temp files will NOT be deleted"; else echo "_KEEP_TEMP_FILES: temp files will be deleted"; fi
 
-#----------------------------------------------------------------------------------------------------------------------
-# End of determine machine, environment, installation type and version-to-install
-#######################################################################################################################
+echo "Step 5 finished."
+
+#--------------------------------------------------------------------------------------------------------------------5-
+# End of step 5: Determine machine, environment, installation type and version-to-install
+#####################################################################################################################5#
 
 
 
-#######################################################################################################################
-#  Installation
-#----------------------------------------------------------------------------------------------------------------------
+#####################################################################################################################6#
+#  Step 6: Installation
+#--------------------------------------------------------------------------------------------------------------------6-
 
-echo -e "\n\e[1m ----- installation\e[0m"
+echo -e "\n${_GREEN}Step 6: Installation.${_NC}"
 
 # If this script is run, but not sourced:
 if [[ $0 == "$BASH_SOURCE" ]]; then
@@ -1088,25 +1114,31 @@ else
     echo "test"
 fi
 
-#----------------------------------------------------------------------------------------------------------------------
-# End of Installation
-#######################################################################################################################
+echo "Step 6 finished."
+
+#--------------------------------------------------------------------------------------------------------------------6-
+# End of Step 6: Installation
+#####################################################################################################################6#
 
 
 
-#######################################################################################################################
-#  Cleanup
-#----------------------------------------------------------------------------------------------------------------------
+#####################################################################################################################7#
+#  Step 7: Cleanup
+#--------------------------------------------------------------------------------------------------------------------7-
 
 #todo
-#echo -e "\n\e[1m ----- cleanup\e[0m"
+#echo -e "\n$_BOLD ----- cleanup$_NB"
 
 
-#######################################################################################################################
+#echo "Step 7 finished."
+
+#--------------------------------------------------------------------------------------------------------------------7-
+# End of Step 67: Installation
+#####################################################################################################################7#
 
 
 
-echo -e "\n\e[1m ----- finished.\e[0m"
+echo -e "\n${_GREEN}Finished.${_NC}\n\n"
 
 
 exit 0
@@ -1152,14 +1184,13 @@ Anatomy of this script:
 4.3. install fnm ????????????and configure its use? todo
 4.4. 
 5. determine machine, environment, installation type and version-to-install 
-6. 
-7. installation
-7.0. perform version-specific preinstall (if exists)
-7.1. perform package-based or git-based installation (git-based todo as of 2023-08-08)
-7.2. satisfy requirements for companion
-7.3. perform version-specific postinstall (if exists)
-7.4. administrate system for companion (systemd, launch, helper scripts, …)
-8. cleanup
+6. installation
+6.0. perform version-specific preinstall (if exists)
+6.1. perform package-based or git-based installation (git-based todo as of 2023-08-08)
+6.2. satisfy requirements for companion
+6.3. perform version-specific postinstall (if exists)
+6.4. administrate system for companion (systemd, launch, helper scripts, …)
+7. cleanup
 
 ToDo
 
@@ -1192,13 +1223,13 @@ usage of a multiline string (enclosed with : ' ... '), which is a common way in 
 
 
 
-# echo -e "\n\e[1m ----- variable declarations\e[0m"
-# echo -e "\n\e[1m ----- function declarations\e[0m"
-# echo -e "\n\e[1m ----- satisfy requirements for installer\e[0m"
-# echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
-# echo -e "\n\e[1m ----- installation\e[0m"
-# echo -e "\n\e[1m ----- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\e[0m"
-# echo -e "\n\e[1m ----- cleanup\e[0m"
+# echo -e "\n$_BOLD ----- variable declarations$_NB"
+# echo -e "\n$_BOLD ----- function declarations$_NB"
+# echo -e "\n$_BOLD ----- satisfy requirements for installer$_NB"
+# echo -e "\n$_BOLD ----- determine machine, environment, installation type and version-to-install$_NB"
+# echo -e "\n$_BOLD ----- installation$_NB"
+# echo -e "\n$_BOLD ----- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx$_NB"
+# echo -e "\n$_BOLD ----- cleanup$_NB"
 
 
 
