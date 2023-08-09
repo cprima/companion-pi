@@ -12,18 +12,27 @@
 # Developer Notes at the bottom
 #######################################################################################################################
 
+# Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
+set -e
+
+error_handler() {
+    local exit_code="$?"
+    if [ "$exit_code" -ne 0 ]; then
+        echo "Error occurred in script. Last command exited with: $exit_code"
+    fi
+}
+# Bash will execute error_handler when receiving the signal EXIT
+trap error_handler EXIT
+
+# Treat unset variables as an error
+set -o nounset
+
 
 
 #######################################################################################################################
 #  Variable declarations
 #----------------------------------------------------------------------------------------------------------------------
 echo -e "\n\e[1m ----- Variable declarations\e[0m"
-
-# Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
-set -e
-
-# Treat unset variables as an error
-set -o nounset
 
 #todo check use
 __ScriptVersion="v0.1.0"
@@ -246,7 +255,7 @@ __parse_semver() {
     # Validate the version format
     if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         echo "Error: Invalid semantic version format."
-        return 1
+        exit 1
     fi
     
     # Parse major, minor, and patch versions
@@ -305,9 +314,9 @@ __is_version_lt_2_4_2() {
     if [[ $major -lt 2 ]] || 
        [[ $major -eq 2 && $minor -lt 4 ]] || 
        [[ $major -eq 2 && $minor -eq 4 && $patch -lt 2 ]]; then
-        return 0  # True, the version is less than v2.4.2
+        return 0  # True, the version is less than v2.4.2 #todo notabene return
     else
-        return 1  # False, the version is not less than v2.4.2
+        return 1  # False, the version is not less than v2.4.2 #todo notabene return
     fi
 } # ----------  end of function __is_version_lt_2_4_2  ----------
 
@@ -495,7 +504,7 @@ __get_latest_version() {
     # Ensure both arguments are provided
     if [ "$#" -ne 2 ]; then
         echo "Usage: get_latest_version API_ENDPOINT TARGET"
-        return 1
+        exit 1
     fi
     local API_ENDPOINT="$1"
     local TARGET="$2"
@@ -524,7 +533,7 @@ Example:
 __create_user_with_groups() {
     if [ "$#" -lt 1 ]; then
         echo "Error: Username is required."
-        return 1
+        exit 1
     fi
 
     local username="$1"
@@ -532,7 +541,7 @@ __create_user_with_groups() {
     # Check if the user already exists
     if id "$username" &>/dev/null; then
         echo "Error: User '$username' already exists."
-        return 2
+        exit 2
     fi
 
     # Create the user
@@ -540,7 +549,7 @@ __create_user_with_groups() {
         echo "User '$username' created successfully."
     else
         echo "Error: Failed to create user '$username'."
-        return 3
+        exit 3
     fi
 
     # Add user to groups
@@ -577,13 +586,13 @@ __install_apt_packages() {
     # Check if apt-get is available
     if ! command -v apt-get &> /dev/null; then
         echo "Error: apt-get is not available on this system."
-        return 1
+        exit 1
     fi
 
     # Ensure there's at least one package to install
     if [ "$#" -eq 0 ]; then
         echo "Error: No packages specified for installation."
-        return 2
+        exit 2
     fi
 
     # Update package lists
@@ -596,7 +605,7 @@ __install_apt_packages() {
         echo "Packages $@ installed."
     else
         echo "Error: Failed to install some packages."
-        return 3
+        exit 3
     fi
 } # ----------  end of function __install_apt_packages  ----------
 
@@ -627,11 +636,12 @@ __install_fnm() {
         echo "export FNM_DIR=${FNM_DIR}" >> /root/.bashrc #todo
 
         # Download and install fnm
-        if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /opt/fnm; then
+        if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir ${FNM_DIR}; then
             echo "fnm installed successfully."
         else
             echo "Error: Failed to install fnm."
-            return 1
+            #todo check usage $?
+            exit 1
         fi
     fi
 
@@ -675,7 +685,7 @@ __clone_or_update_repo() {
             git pull -q origin "$branch"
         else
             echo "Error: Target directory exists but is not a git repository."
-            return 1
+            exit 1
         fi
     fi
 } # ----------  end of function __clone_or_update_repo  ----------
@@ -721,11 +731,11 @@ __download_and_extract_package() {
         # We're being told not to move files, instead copy them so we can keep
         # them around
         cp -r /tmp/companion-package/resources "${COMPANION_INSTALL_FOLDER}"
-        return $? #todo
+        #exit $? #todo
     else
         mv /tmp/companion-package/resources "${COMPANION_INSTALL_FOLDER}"
         rm -R /tmp/companion-package
-        return $? #todo
+        #exit $? #todo
     fi
 
 } # ----------  end of function __download_and_extract_package  ----------
@@ -755,7 +765,7 @@ __install_update_prompt() {
     # Check if yarn is available
     if ! command -v yarn &> /dev/null; then
         echo "yarn command not found. Please install yarn before proceeding."
-        return 1
+        exit 1
     fi
 
     local cwd="${1:-${COMPANIONPI_CLONE_FOLDER}/update-prompt}"
@@ -789,13 +799,14 @@ Description:
 # create_symlinks "/path/to/other/source/directory"
 '
 __create_symlinks() {
-    #todo use global variable
-    local src_dir="${1:-/usr/local/src/companionpi}"
-    
+    #todo check use global variable
+    local src_dir="${1:-$COMPANIONPI_CLONE_FOLDER}"
+
     for script in "${COMPANION_SCRIPTS_TO_SYMLINK[@]}"; do
+        echo "Installing $script from $COMPANIONPI_CLONE_FOLDER"
         ln -s -f "$src_dir/$script" "/usr/local/bin/$script"
     done
-} # ----------  end of function __is_version_lt_2_4_2  ----------
+} # ----------  end of function __create_symlinks  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -817,10 +828,11 @@ Description:
 '
 __create_motd_symlink() {
     #todo use global variable
-    local src_dir="${1:-/usr/local/src/companionpi}"
+    local src_dir="${1:-$COMPANIONPI_CLONE_FOLDER}"
     
+    echo "Installing motd from $COMPANIONPI_CLONE_FOLDER"
     ln -s -f "$src_dir/motd" "/etc/motd"
-} # ----------  end of function __is_version_lt_2_4_2  ----------
+} # ----------  end of function __create_motd_symlink  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -848,7 +860,7 @@ __setup_node_with_fnm() {
     # Navigate to the installation folder
     cd "${COMPANION_INSTALL_FOLDER}" || {
         echo "Error: Failed to change directory to ${COMPANION_INSTALL_FOLDER}"
-        return 1
+        exit 1
     }
 
     # Display the Node version from .node-version file
@@ -858,12 +870,13 @@ __setup_node_with_fnm() {
     fnm use --install-if-missing --silent-if-unchanged
 
     # Create an alias for the current Node version
-    # Enables use of: export PATH=/opt/fnm/aliases/companion/bin:$PATH
+    # Enables use of: export PATH=/opt/fnm/aliases/companion/bin:$PATH #todo use global variable
     fnm alias "$(fnm current)" companion
 
     # Update PATH to include the Node binaries
     export PATH="${FNM_DIR}/aliases/companion/bin:$PATH"
-} # ----------  end of function __is_version_lt_2_4_2  ----------
+
+} # ----------  end of function __setup_node_with_fnm  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -899,14 +912,14 @@ __fetch_latest_uri() {
 preinstall_3.0.0() {
     echo "~~PRE~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
-# ----------  end of function __is_version_lt_2_4_2  ----------
+# ----------  end of preinstall_3.0.0  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #todo explain
 postinstall_3.0.0() {
     echo "~~POST~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
-# ----------  end of function __is_version_lt_2_4_2  ----------
+# ----------  end of function postinstall_3.0.0  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #######################################################????????????????todo
@@ -921,10 +934,12 @@ install_packaged_v3() {
     # todo check influence of global declaration
     if [[ "$COMPANION_PACKAGE_URL" && "$COMPANION_PACKAGE_URL" != "null" ]]; then
         __download_and_extract_package "$COMPANION_PACKAGE_URL"
-exit 0
         __setup_node_with_fnm
-        cd ${COMPANION_INSTALL_FOLDER}
-        npm --unsafe-perm install -g yarn #&>/dev/null #todo errorhandlign
+        if ! cd ${COMPANION_INSTALL_FOLDER}; then
+            echo "Failed to change directory to ${COMPANION_INSTALL_FOLDER}"
+            exit 1
+        fi
+        npm --unsafe-perm install -g yarn &>/dev/null #will install to /opt/fnm/aliases/companion/bin/yarn
         __install_apt_packages "${COMPANION_DEPS[@]}"
         __copy_semantic_versioned_file "${COMPANIONPI_INSTALLATION_VERSION}" "companion.service" "/etc/systemd/system"
         #systemctl daemon-reload
@@ -1040,8 +1055,9 @@ echo "COMPANIONPI_INSTALLATION_VERSION: ${COMPANIONPI_INSTALLATION_VERSION}"
 echo "COMPANION_PACKAGE_TARGET: ${COMPANION_PACKAGE_TARGET}"
 echo "COMPANION_API_PACKAGES_URL: ${COMPANION_API_PACKAGES_URL}"
 echo "COMPANION_PACKAGE_URL: ${COMPANION_PACKAGE_URL}"
-if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then echo "downloaded files will be deleted"; else echo "downloaded files will NOT be deleted"; fi
-if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then echo "temp files will NOT be deleted"; else echo "temp files will be deleted"; fi
+echo "COMPANION_INSTALL_FOLDER: ${COMPANION_INSTALL_FOLDER}"
+if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then echo "_DELETE_DOWNLOADED_FILES: downloaded files will be deleted"; else echo "_DELETE_DOWNLOADED_FILES: downloaded files will NOT be deleted"; fi
+if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then echo "_KEEP_TEMP_FILES: temp files will NOT be deleted"; else echo "_KEEP_TEMP_FILES: temp files will be deleted"; fi
 
 #----------------------------------------------------------------------------------------------------------------------
 # End of determine machine, environment, installation type and version-to-install
@@ -1065,8 +1081,11 @@ if [[ $0 == "$BASH_SOURCE" ]]; then
         echo "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
         exit 1
     else
+        echo "Going to install packaged v3 into ${COMPANION_INSTALL_FOLDER}"
         install_packaged_v3
     fi
+else
+    echo "test"
 fi
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -1079,35 +1098,36 @@ fi
 #  Cleanup
 #----------------------------------------------------------------------------------------------------------------------
 
-echo -e "\n\e[1m ----- cleanup\e[0m"
+#todo
+#echo -e "\n\e[1m ----- cleanup\e[0m"
 
-# todo: How to handle downloaded file?
 
 #######################################################################################################################
 
-exit 0
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+echo -e "\n\e[1m ----- finished.\e[0m"
 
 
 exit 0
-# add the fnm node to this users path
-# TODO - verify permissions
-echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashrc
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+exit 0
 
 
 ######################################################################################
@@ -1140,6 +1160,17 @@ Anatomy of this script:
 7.3. perform version-specific postinstall (if exists)
 7.4. administrate system for companion (systemd, launch, helper scripts, …)
 8. cleanup
+
+ToDo
+
+- for each call to exit, check if return should be called. And how it relates to set -e
+
+# add the fnm node to this users path
+# TODO - verify permissions
+#todo use global variable
+echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashrc
+
+
 
 Styleguide
 
