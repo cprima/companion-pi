@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-if [ $(/usr/bin/id -u) -ne 0 ]; then
-    echo "Must be run as root"
-    exit 1
-fi
-
 #======================================================================================================================
 # CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
 # Copyright (c) …
@@ -15,6 +10,11 @@ fi
 # Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
 # Developer Notes at the bottom
 #======================================================================================================================
+
+#======================================================================================================================
+#  Variable declarations
+#----------------------------------------------------------------------------------------------------------------------
+echo -e "\n\e[1m ----- Variable declarations\e[0m"
 
 # Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
 set -e
@@ -87,8 +87,10 @@ COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi-ng"
 COMPANIONPI_CLONE_FOLDER="/mnt/d/github.com/cprima/companion-pi"
 COMPANION_INSTALL_FOLDER="/opt/companion"
 
-#
+# fnm read the environment variable as its base-dir for the root directory of fnm installations
 FNM_DIR=/opt/fnm
+export FNM_DIR=${FNM_DIR} 
+
 #======================================================================================================================
 
 
@@ -96,7 +98,7 @@ FNM_DIR=/opt/fnm
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #         NAME:  __usage
-#  DESCRIPTION:  Display usage information.
+#  DESCRIPTION:  Display usage information. Needs to be declared before getopts call.
 #----------------------------------------------------------------------------------------------------------------------
 __usage() {
     cat << EOT
@@ -132,6 +134,7 @@ __usage() {
 EOT
 }   # ----------  end of function __usage  ----------
 
+echo -e "\n\e[1m ----- Going to parse arguments, possibly overwriting variable declarations\e[0m"
 
 # parse positional parameters from [options]
 # may overwrite default variable values
@@ -154,84 +157,47 @@ done
 shift "$((OPTIND-1))"
 
 
+#----------------------------------------------------------------------------------------------------------------------
+# End of variable declarations
+#======================================================================================================================
+
+
+
+
+#======================================================================================================================
+#  Function declarations
+#----------------------------------------------------------------------------------------------------------------------
+echo -e "\n\e[1m ----- function declarations\e[0m"
+
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #         NAME:  __foo
-#  DESCRIPTION:  Foo bar todo
+#  DESCRIPTION:  Template
 #----------------------------------------------------------------------------------------------------------------------
+: '
+__foo
+
+Description…
+
+Parameters:
+    $1 - if used
+
+Return:
+    Returns…
+
+Example:
+    someval=$(__foo)
+    echo "$someval"
+'
 __foo() {
     echo foo
 }   # ----------  end of function __foo  ----------
 
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
-: '
-__determine_package_target
 
-Determines the target platform and architecture for downloading a package.
-The function identifies the systems OS (Mac, Raspberry Pi, or Windows) and its architecture (32-bit or 64-bit).
-To be used on https://api.bitfocus.io/v1/product/companion/packages?branch=stable
-
-Parameters:
-    $1 - todo write explanation
-
-Return:
-    A string representing the determined target platform and architecture.
-    Must return one of mac-arm, mac-intel, linux-tgz, linux-arm64-tgz.
-
-Example:
-    target=$(__determine_package_target)
-    echo "$target"
-'
 #----------------------------------------------------------------------------------------------------------------------
-__determine_package_target() {
-    local machine
-    local os
-    local package_target
-    local majorversion="${1:-3}"  # Default to '3' if no version specified
-    machine=$(uname -m) #macOS: arm64, x86_64; RPi: armv6l,armv7l,armv8l,aarch64; WSL: x86_64
-    os=$(uname -s)
-
-    if [ "$os" == "Darwin" ]; then
-        if [ "$machine" == "x86_64" ]; then
-            package_target="mac-intel"
-        else
-            package_target="mac-arm"
-        fi
-    elif [ "$os" == "Linux" ]; then
-        if [ "$machine" == "x86_64" ]; then
-            # 64-bit architecture
-            if [ "${majorversion}" == "2" ]; then
-                # v2.4.2 does not exist as linux-arm64-tgz
-                package_target="linux-tgz"
-            else
-                package_target="linux-arm64-tgz"
-            fi
-        elif [ "$machine" == "i686" ] || [ "$machine" == "i386" ]; then
-            # 32-bit architecture.
-            package_target="linux-tgz"
-        elif [ "$machine" == "armv6l" ] || [ "$machine" == "armv7l" ]; then
-            # likely on a 32-bit Raspberry Pi (or another ARM-based device).
-            package_target="linux-tgz"
-        elif [ "$machine" == "armv8l" ] || [ "$machine" == "aarch64" ]; then
-            # likely on a 64-bit Raspberry Pi (or another ARM-based device).
-            if [ "${majorversion}" == "2" ]; then
-                # v2.4.2 does not exist as arm64
-                package_target="linux-tgz"
-            else
-                package_target="linux-arm64-tgz"
-            fi
-        fi
-    else
-        echo "You are on a type of machine that is not supported by this script."
-        exit 1
-    fi
-
-    # Returning a string value via echo
-    echo ${package_target}
-
-}   # ----------  end of function __determine_package_target  ----------
-
+#--helper functions----------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
@@ -299,6 +265,211 @@ __parse_semver() {
         *) echo "Error: Invalid component. Choose between 'major', 'minor', 'patch', 'prerelease', or leave empty for full version." ;;
     esac
 } # ----------  end of function __parse_semver  ----------
+
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+: '
+__is_version_lt_2_4_2
+
+Checks if the provided semantic version string is less than "v2.4.2".
+
+Parameters:
+    $1 - Semantic version string (e.g., "v1.2.3").
+
+Return:
+    Returns 0 (true) if the provided version is less than "v2.4.2", and 1 (false) otherwise.
+
+Example:
+    if __is_version_lt_2_4_2 "v1.3.5"; then
+        echo "Version is less than v2.4.2"
+    else
+        echo "Version is not less than v2.4.2"
+    fi
+'
+__is_version_lt_2_4_2() {
+    local version="$1"
+
+    local major=$(__parse_semver "$version" "major")
+    local minor=$(__parse_semver "$version" "minor")
+    local patch=$(__parse_semver "$version" "patch")
+
+    if [[ $major -lt 2 ]] || 
+       [[ $major -eq 2 && $minor -lt 4 ]] || 
+       [[ $major -eq 2 && $minor -eq 4 && $patch -lt 2 ]]; then
+        return 0  # True, the version is less than v2.4.2
+    else
+        return 1  # False, the version is not less than v2.4.2
+    fi
+} # ----------  end of function __is_version_lt_2_4_2  ----------
+
+
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+
+: '
+__append_in_bashrc_to_path
+
+Append a directory to the PATH variable in ~/.bashrc if not already present.
+
+Usage:
+    __append_in_bashrc_to_path /path/to/directory
+
+Parameters:
+    $1: The directory path to add to the PATH.
+
+Example:
+# Example usage:
+# __append_in_bashrc_to_path "/path/to/directory"
+
+Description:
+    This function checks if the provided directory path is already present in the 
+    PATH variable declaration within the ~/.bashrc file. If the directory is not 
+    already in PATH, the function appends it. If it is already present, a message 
+    indicating the same is displayed.
+'
+
+__append_in_bashrc_to_path() {
+
+    local new_dir="$1"
+    
+    # Check if the path is already in the .bashrc PATH declaration
+    if ! grep -q "PATH.*$new_dir" ~/.bashrc; then
+        # Append the new directory to PATH in .bashrc
+        echo "export PATH=\$PATH:$new_dir" >> ~/.bashrc
+        echo "Added $new_dir to PATH in ~/.bashrc"
+    else
+        echo "$new_dir is already in PATH in ~/.bashrc"
+    fi
+}
+
+# ----------  end of function __append_in_bashrc_to_path  ----------
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+: '
+__copy_semantic_versioned_file
+
+Copy a file based on semantic versioning from subfolders.
+
+Usage:
+    copy_semantic_versioned_file SEMANTIC_VERSION GIT_REPO_URL
+
+Globals:
+    COMPANIONPI_CLONE_FOLDER: todo
+
+Parameters:
+    SEMANTIC_VERSION: The version for which the file should be checked and copied.
+    FILE: 
+    TARGETFOLDER: 
+
+Description:
+    This function will clone the given git repository and then look for a file in subfolders 
+    named by semantic versioning. It will try to copy the file based on the given version, 
+    and if not found, it will step up the version hierarchy until it finds the file.
+    
+# Example usage:
+# copy_semantic_versioned_file "2.4.2" "myfile.txt" "/tmp"
+'
+__copy_semantic_versioned_file() {    
+    local version="$1"
+    local major=$(__parse_semver "$version" "major")
+    local minor=$(__parse_semver "$version" "minor")
+    local patch=$(__parse_semver "$version" "patch")
+    local file="$2"
+    local targetfolder="$3"
+
+    # Clone the repo and cd into it
+    #git clone "$repo_url" cloned_repo
+    cd ${COMPANIONPI_CLONE_FOLDER}
+
+    # Check and copy the file based on version hierarchy
+    if [[ -f "./files/v${major}.${minor}.${patch}/${file}" ]]; then
+        cp "./files/v${major}.${minor}.${patch}/${file}" "${targetfolder}"
+    elif [[ -f "./files/v${major}.${minor}/${file}" ]]; then
+        cp "./files/v${major}.${minor}/${file}" "${targetfolder}"
+    else
+        cp "./files/v${major}/${file}" "${targetfolder}"
+    fi
+
+} # ----------  end of __copy_semantic_versioned_file  ----------
+
+
+
+#----------------------------------------------------------------------------------------------------------------------
+#--installer functions-------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------------------------
+
+
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+: '
+__determine_package_target
+
+Determines the target platform and architecture for downloading a package,
+with reference to  https://api.bitfocus.io/v1/product/companion/packages?branch=stable
+The function identifies the systems OS (Mac, Raspberry Pi, or Windows) and its architecture (32-bit or 64-bit).
+
+Parameters:
+    $1 - Companion major version
+
+Return:
+    A string representing the determined target platform and architecture.
+    Must return one of mac-arm, mac-intel, linux-tgz, linux-arm64-tgz.
+
+Example:
+    target=$(__determine_package_target)
+    echo "$target"
+'
+#----------------------------------------------------------------------------------------------------------------------
+__determine_package_target() {
+    local machine
+    local os
+    local package_target
+    local majorversion="${1:-3}"  # Default to '3' if no version specified
+    machine=$(uname -m) #macOS: arm64, x86_64; RPi: armv6l,armv7l,armv8l,aarch64; WSL: x86_64
+    os=$(uname -s)
+
+    if [ "$os" == "Darwin" ]; then
+        if [ "$machine" == "x86_64" ]; then
+            package_target="mac-intel"
+        else
+            package_target="mac-arm"
+        fi
+    elif [ "$os" == "Linux" ]; then
+        if [ "$machine" == "x86_64" ]; then
+            # 64-bit architecture
+            if [ "${majorversion}" == "2" ]; then
+                # v2.4.2 does not exist as linux-arm64-tgz
+                package_target="linux-tgz"
+            else
+                package_target="linux-arm64-tgz"
+            fi
+        elif [ "$machine" == "i686" ] || [ "$machine" == "i386" ]; then
+            # 32-bit architecture.
+            package_target="linux-tgz"
+        elif [ "$machine" == "armv6l" ] || [ "$machine" == "armv7l" ]; then
+            # likely on a 32-bit Raspberry Pi (or another ARM-based device).
+            package_target="linux-tgz"
+        elif [ "$machine" == "armv8l" ] || [ "$machine" == "aarch64" ]; then
+            # likely on a 64-bit Raspberry Pi (or another ARM-based device).
+            if [ "${majorversion}" == "2" ]; then
+                # v2.4.2 does not exist as arm64
+                package_target="linux-tgz"
+            else
+                package_target="linux-arm64-tgz"
+            fi
+        fi
+    else
+        echo "You are on a type of machine that is not supported by this script."
+        exit 1
+    fi
+
+    # Returning a string value via echo
+    echo ${package_target}
+
+}   # ----------  end of function __determine_package_target  ----------
+
+
+
 
 
 
@@ -455,10 +626,10 @@ Example:
 
 __install_fnm() {
     # Set and export the FNM_DIR variable
-    export FNM_DIR=/opt/fnm #todo remove
+    export FNM_DIR=${FNM_DIR}
 
     # Append the setting to root's .bashrc for persistence
-    echo "export FNM_DIR=/opt/fnm" >> /root/.bashrc #todo
+    echo "export FNM_DIR=${FNM_DIR}" >> /root/.bashrc #todo
 
     # Download and install fnm
     if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /opt/fnm; then
@@ -468,45 +639,7 @@ __install_fnm() {
         return 1
     fi
 
-    #--version-file-strategy
-
 } # ----------  end of function __install_fnm  ----------
-
-
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
-: '
-__is_version_lt_2_4_2
-
-Checks if the provided semantic version string is less than "v2.4.2".
-
-Parameters:
-    $1 - Semantic version string (e.g., "v1.2.3").
-
-Return:
-    Returns 0 (true) if the provided version is less than "v2.4.2", and 1 (false) otherwise.
-
-Example:
-    if __is_version_lt_2_4_2 "v1.3.5"; then
-        echo "Version is less than v2.4.2"
-    else
-        echo "Version is not less than v2.4.2"
-    fi
-'
-__is_version_lt_2_4_2() {
-    local version="$1"
-
-    local major=$(__parse_semver "$version" "major")
-    local minor=$(__parse_semver "$version" "minor")
-    local patch=$(__parse_semver "$version" "patch")
-
-    if [[ $major -lt 2 ]] || 
-       [[ $major -eq 2 && $minor -lt 4 ]] || 
-       [[ $major -eq 2 && $minor -eq 4 && $patch -lt 2 ]]; then
-        return 0  # True, the version is less than v2.4.2
-    else
-        return 1  # False, the version is not less than v2.4.2
-    fi
-} # ----------  end of function __is_version_lt_2_4_2  ----------
 
 
 
@@ -598,83 +731,26 @@ __download_and_extract_package() {
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-
 : '
-__append_in_bashrc_to_path
+__install_update_prompt()
 
-Append a directory to the PATH variable in ~/.bashrc if not already present.
+Run yarn install in the specified directory or default to the update-prompt directory of companionpi.
 
 Usage:
-    __append_in_bashrc_to_path /path/to/directory
+    install_update_prompt [directory_path]
 
 Parameters:
-    $1: The directory path to add to the PATH.
-
-Example:
-# Example usage:
-# __append_in_bashrc_to_path "/path/to/directory"
+    directory_path: Optional. The directory where yarn install should be run. Defaults to "/usr/local/src/companionpi/update-prompt".
 
 Description:
-    This function checks if the provided directory path is already present in the 
-    PATH variable declaration within the ~/.bashrc file. If the directory is not 
-    already in PATH, the function appends it. If it is already present, a message 
-    indicating the same is displayed.
-'
-
-__append_in_bashrc_to_path() {
-
-    local new_dir="$1"
-    
-    # Check if the path is already in the .bashrc PATH declaration
-    if ! grep -q "PATH.*$new_dir" ~/.bashrc; then
-        # Append the new directory to PATH in .bashrc
-        echo "export PATH=\$PATH:$new_dir" >> ~/.bashrc
-        echo "Added $new_dir to PATH in ~/.bashrc"
-    else
-        echo "$new_dir is already in PATH in ~/.bashrc"
-    fi
-}
-
-# ----------  end of function __append_in_bashrc_to_path  ----------
-
-
-
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
-: '
-__install_update_prompt
-
-Run yarn install in the update-prompt directory of companionpi.
-
-Usage:
-    install_update_prompt
-
-Description:
-    This function changes the current working directory to 
-    "/usr/local/src/companionpi/update-prompt" and runs the yarn install 
-    command to install the necessary dependencies.
-'
+    This function checks if yarn is available, then changes the current working directory to the specified directory 
+    (or the default if none is provided) and runs the yarn install command to install the necessary dependencies.
 # Example usage:
 # install_update_prompt
+# or
+# install_update_prompt "/path/to/other/directory"
+'
 __install_update_prompt() {
-    yarn --cwd "/usr/local/src/companionpi/update-prompt" install
-}
-
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
-install_update_prompt() {
-    : '
-    Run yarn install in the specified directory or default to the update-prompt directory of companionpi.
-
-    Usage:
-        install_update_prompt [directory_path]
-
-    Parameters:
-        directory_path: Optional. The directory where yarn install should be run. Defaults to "/usr/local/src/companionpi/update-prompt".
-
-    Description:
-        This function checks if yarn is available, then changes the current working directory to the specified directory 
-        (or the default if none is provided) and runs the yarn install command to install the necessary dependencies.
-    '
 
     # Check if yarn is available
     if ! command -v yarn &> /dev/null; then
@@ -682,15 +758,11 @@ install_update_prompt() {
         return 1
     fi
 
-    local cwd="${1:-/usr/local/src/companionpi/update-prompt}"
+    local cwd="${1:-${COMPANIONPI_CLONE_FOLDER}/update-prompt}"
     
     yarn --cwd "$cwd" --silent install
 }
 
-# Example usage:
-# install_update_prompt
-# or
-# install_update_prompt "/path/to/other/directory"
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 # Declare global variable
@@ -784,7 +856,7 @@ __setup_node_with_fnm() {
     }
 
     # Display the Node version from .node-version file
-    cat .node-version
+    #cat .node-version
 
     # Use fnm to set up Node based on .node-version, and install if missing
     fnm use --install-if-missing --silent-if-unchanged
@@ -828,56 +900,6 @@ __fetch_latest_uri() {
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-__copy_semantic_versioned_file() {
-    : '
-    Copy a file based on semantic versioning from subfolders.
-
-    Usage:
-        copy_semantic_versioned_file SEMANTIC_VERSION GIT_REPO_URL
-
-    Globals:
-        COMPANIONPI_CLONE_FOLDER: todo
-
-    Parameters:
-        SEMANTIC_VERSION: The version for which the file should be checked and copied.
-        FILE: 
-        TARGETFOLDER: 
-
-    Description:
-        This function will clone the given git repository and then look for a file in subfolders 
-        named by semantic versioning. It will try to copy the file based on the given version, 
-        and if not found, it will step up the version hierarchy until it finds the file.
-        
-# Example usage:
-# copy_semantic_versioned_file "2.4.2" "myfile.txt" "/tmp"
-    '
-    
-    local version="$1"
-    local major=$(__parse_semver "$version" "major")
-    local minor=$(__parse_semver "$version" "minor")
-    local patch=$(__parse_semver "$version" "patch")
-    local file="$2"
-    local targetfolder="$3"
-
-    # Clone the repo and cd into it
-    #git clone "$repo_url" cloned_repo
-    cd ${COMPANIONPI_CLONE_FOLDER}
-
-    # Check and copy the file based on version hierarchy
-    if [[ -f "./files/v${major}.${minor}.${patch}/${file}" ]]; then
-        cp "./files/v${major}.${minor}.${patch}/${file}" "${targetfolder}"
-    elif [[ -f "./files/v${major}.${minor}/${file}" ]]; then
-        cp "./files/v${major}.${minor}/${file}" "${targetfolder}"
-    else
-        cp "./files/v${major}/${file}" "${targetfolder}"
-    fi
-
-}
-
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
-
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
 
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
@@ -908,62 +930,9 @@ postinstall_3.0.0() {
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-install_packaged() {
 
-    prefix="preinstall_"
-    variable_part="3.0.0"
-    suffix=""
-
-    function_name="${prefix}${variable_part}${suffix}"
-
-    if declare -Ff "$function_name" > /dev/null; then
-        echo "Function ${function_name} exists"
-    else
-        echo "Function ${function_name} does not exist"
-    fi
-
-
-    #__download_and_extract_package
-    # do_udev_stuff
-    # do sudoers
-    # # if neither old or new config direcoty exists, create it. This is to work around a bug in 3.0.0-rc2
-    # if [ ! -d "/home/companion/.config/companion-nodejs" ]; then
-    #     if [ ! -d "/home/companion/companion" ]; then
-    #         su companion -c "mkdir -p /home/companion/.config/companion-nodejs"
-    #     fi
-    # fi
-    # cp companion.service /etc/systemd/system
-    # systemctl daemon-reload
-    # create_symlinks
-    # create_motd_symlink
-
-    prefix="postinstall_"
-    variable_part="3.0.0"
-    suffix=""
-
-    function_name="${prefix}${variable_part}${suffix}"
-
-    if declare -Ff "$function_name" > /dev/null; then
-        echo "Function ${function_name} exists"
-    else
-        echo "Function ${function_name} does not exist"
-    fi
-}
-# ----------  end of function install_packaged  ----------
-
-
-
-main_v3() {
+main_install_packaged_v3() {
     local URI=$(__fetch_latest_uri)
-    # the following code depends on some packages, like git or jq.
-    #__install_apt_packages "${COMPANIONPI_DEPS[@]}"
-
-    # get installer repo and software repo into /usr/local/src/ 
-    #__clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
-    #__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
-
-    # The Fast and simple Node.js version Manager, instructed to work on the file .node-version
-    #__install_fnm
     if declare -Ff "preinstall_$(__parse_semver "${IVERSION}" "all")" > /dev/null; then
         "preinstall_$(__parse_semver "${IVERSION}" "all")"
     fi
@@ -988,26 +957,48 @@ main_v3() {
         echo "No matching package found for target: $(__determine_package_target $(__parse_semver "${IVERSION}" "major")) and version: $IVERSION"
         exit 1
     fi
-}
+} # ----------  end of function install_packaged  ----------
 
 
-#==end functions=======================================================================================================
-#======================================================================================================================
-#======================================================================================================================
-#======================================================================================================================
-#======================================================================================================================
-#======================================================================================================================
-#======================================================================================================================
-
-
-
-
-
-
-
-#======================================================================================================================
-#  Based on how this script is called: What is to do?
 #----------------------------------------------------------------------------------------------------------------------
+#  End of function declarations
+#======================================================================================================================
+
+
+
+
+
+#======================================================================================================================
+#  Satisfy requirements for this installer script
+#----------------------------------------------------------------------------------------------------------------------
+echo -e "\n\e[1m ----- satisfy requirements for installer script\e[0m"
+
+if [ $(/usr/bin/id -u) -ne 0 ]; then
+    echo "Must be run as root"
+    exit 1
+fi
+
+# # the following code depends on some packages, like git or jq.
+#__install_apt_packages "${COMPANIONPI_DEPS[@]}"
+
+# # get installer repo and software repo into /usr/local/src/ 
+#__clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
+#__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
+
+# # The Fast and simple Node.js version Manager, instructed to work on the file .node-version
+#__install_fnm
+
+
+#----------------------------------------------------------------------------------------------------------------------
+# 
+#======================================================================================================================
+
+
+
+#======================================================================================================================
+#  Determine machine, environment, installation type and version-to-install
+#----------------------------------------------------------------------------------------------------------------------
+echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
 
 # Determine installation-type from the argument
 if [ "$#" -gt 0 ];then
@@ -1066,7 +1057,17 @@ echo "${IVERSION}"
 echo "$ITYPE"
 echo "target: ${target}"
 
-#__copy_semantic_versioned_file "${IVERSION}" ".gitkeep" "/tmp"
+#----------------------------------------------------------------------------------------------------------------------
+# 
+#======================================================================================================================
+
+
+
+#======================================================================================================================
+#  Installation
+#----------------------------------------------------------------------------------------------------------------------
+echo -e "\n\e[1m ----- installation\e[0m"
+
 
 
 # If this script is run, but not sourced:
@@ -1079,14 +1080,23 @@ if [[ $0 == "$BASH_SOURCE" ]]; then
         echo "Version ${IVERSION} does not meet the specified criteria."
         exit 1
     else
-        main_v3
+        main_install_packaged_v3
     fi
 fi
 
+#----------------------------------------------------------------------------------------------------------------------
+# End of Installation
+#======================================================================================================================
 
 
 
+#======================================================================================================================
+#  Cleanup
+#----------------------------------------------------------------------------------------------------------------------
+echo -e "\n\e[1m ----- cleanup\e[0m"
 
+
+#======================================================================================================================
 
 exit 0
 
@@ -1106,7 +1116,7 @@ exit 0
 
 
 
-
+exit 0
 # add the fnm node to this users path
 # TODO - verify permissions
 echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashrc
@@ -1118,7 +1128,13 @@ echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashr
 
 exit 0
 
-
+# echo -e "\n\e[1m ----- variable declarations\e[0m"
+# echo -e "\n\e[1m ----- function declarations\e[0m"
+# echo -e "\n\e[1m ----- satisfy requirements for installer\e[0m"
+# echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
+# echo -e "\n\e[1m ----- installation\e[0m"
+# echo -e "\n\e[1m ----- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\e[0m"
+# echo -e "\n\e[1m ----- cleanup\e[0m"
 
 
 #======================================================================================================================
@@ -1131,19 +1147,25 @@ Anatomy of this script:
 1. variable declarations
 2. parse arguments, possibly overwriting variable declarations
 3. function declarations
-4. satisfy requirements for installer (incl. root)
-5. determine which "action" the user wants
-6. installation
-6.0. perform version-specific preinstall (if exists)
-6.1. perform package-based or git-based installation (git-based todo as of 2023-08-08)
-6.2. satisfy requirements for companion
-6.3. perform version-specific postinstall (if exists)
-6.4. administrate system for companion (systemd, launch, helper scripts, …)
-7. cleanup
+4. satisfy requirements for installer script (incl. root)
+4.1. 
+4.2. 
+4.3. 
+4.4. 
+5. determine machine, environment, installation type and version-to-install 
+6. 
+7. installation
+7.0. perform version-specific preinstall (if exists)
+7.1. perform package-based or git-based installation (git-based todo as of 2023-08-08)
+7.2. satisfy requirements for companion
+7.3. perform version-specific postinstall (if exists)
+7.4. administrate system for companion (systemd, launch, helper scripts, …)
+8. cleanup
 
 
 
 # outline:
+# 
 # prep install
 # - clone companionpi repo
 # - clone companion repo
@@ -1163,5 +1185,26 @@ Anatomy of this script:
 # todo: bail if wrong OS / machine
 
 
+Styleguide
+
+usage of a multiline string (enclosed with : ' ... '), which is a common way in Bash to create block comments that can serve as function-level documentation or docstrings.
+
 '
 #======================================================================================================================
+
+
+
+
+
+#######################################################################################################################
+#======================================================================================================================
+#**********************************************************************************************************************
+#----------------------------------------------------------------------------------------------------------------------
+#
+#----------------------------------------------------------------------------------------------------------------------
+#**********************************************************************************************************************
+#----------------------------------------------------------------------------------------------------------------------
+#
+#----------------------------------------------------------------------------------------------------------------------
+#======================================================================================================================
+#######################################################################################################################
