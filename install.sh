@@ -28,24 +28,26 @@ set -o nounset
 #todo check use
 __ScriptVersion="v0.1.0"
 __ScriptName="install.sh"
-__ScriptFullName="$0"
-__ScriptArgs="$*"
+#__ScriptFullName="$0"
+#__ScriptArgs="$*"
+_TRUE=1
+_FALSE=0
 
 
 #======================================================================================================================
 #  Defaults for options arguments.
-#  Options arguments as in ${__ScriptName} [options] <install-type> [install-version]
+#  Options arguments as in ${__ScriptName} [options] <install-type> [install-arguments]
 #----------------------------------------------------------------------------------------------------------------------
 # todo
 #======================================================================================================================
 
 
 #======================================================================================================================
-#  Defaults for install-type and install-version arguments.
-#  Install type arguments as in ${__ScriptName} [options] <install-type> [install-version]
+#  Defaults for install-type and install-arguments arguments.
+#  Install-type arguments as in ${__ScriptName} [options] <install-type> [install-arguments]
 #----------------------------------------------------------------------------------------------------------------------
-ITYPE="stable"
-IVERSION="v3.0.0"
+COMPANIONPI_INSTALLATION_TYPE="stable"
+COMPANIONPI_INSTALLATION_VERSION="v3.0.0"  #could be a branch name!
 #unused COMPANION_LATEST_VERSION="v3.0.0" #todo replace with function call
 #======================================================================================================================
 
@@ -62,8 +64,13 @@ IVERSION="v3.0.0"
 #======================================================================================================================
 #  Other default values.
 #  It is explicitly encouraged to use getopts options below to overwrite these default values.
-#  Options as in ${__ScriptName} [options] <install-type> [install-version]
+#  Options as in ${__ScriptName} [options] <install-type> [install-arguments]
 #----------------------------------------------------------------------------------------------------------------------
+
+# If 1 then do not move temporary files, instead copy them
+_KEEP_TEMP_FILES=${_FALSE}
+# If 1 then delete e.g. the downloaded package file
+_DELETE_DOWNLOADED_FILES=${_TRUE}
 # Packages required to run this install script (stored as an array)
 COMPANIONPI_DEPS=("git" "curl" "jq") # "zip" "unzip"
 # Packages required to run Companion (stored as an array)
@@ -77,7 +84,7 @@ COMPANION_USER_GROUPS=("gpio" "dialout")
 ##############todo COMPANION_USER_NAME
 #COMPANION_USER_NAME?????????
 # Default URL where to fetch 
-COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999"
+COMPANION_API_PACKAGES_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999"
 # todo check if names or paths
 COMPANION_SCRIPTS_TO_SYMLINK=("companion-license" "companion-help" "companion-update" "companion-reset")
 # Companion repo source and target
@@ -94,10 +101,17 @@ COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi"
 COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi-ng" #todo remove
 COMPANIONPI_CLONE_FOLDER="/mnt/d/github.com/cprima/companion-pi" #todo remove
 COMPANION_INSTALL_FOLDER="/opt/companion"
+# The package target as published on api.bitfocus.io. One of mac-arm, mac-intel, linux-tgz, linux-arm64-tgz
+#to check if emtpy a good idea #todo check if chekd for emtpy
+COMPANION_PACKAGE_TARGET=""
+# The URL where a package can be downloaded (for a packaged installation, i.e. v3)
+#to check if emtpy a good idea #todo check if chekd for emtpy
+# @see: if [[ "$COMPANION_PACKAGE_URL" && "$COMPANION_PACKAGE_URL" != "null" ]]; then
+COMPANION_PACKAGE_URL=""
 
 # fnm read the environment variable as its base-dir for the root directory of fnm installations
 FNM_DIR=/opt/fnm
-export FNM_DIR=${FNM_DIR} 
+export FNM_DIR=${FNM_DIR}
 
 #----------------------------------------------------------------------------------------------------------------------
 # End of variable declarations
@@ -121,7 +135,7 @@ echo -e "\n\e[1m ----- Going to parse arguments, possibly overwriting variable d
 __usage() {
     cat << EOT
 
-  Usage :  ${__ScriptName} [options] <install-type> [install-version]
+  Usage :  ${__ScriptName} [options] <install-type> [install-arguments]
 
   Installation types:
     - stable                   Install latest stable release. This is the default install type.
@@ -148,6 +162,8 @@ __usage() {
 
   Options:
     -v  Display script version
+    -k  keep downloaded file(s)
+    -t  keep temp file(s)
 
 EOT
 }   # ----------  end of function __usage  ----------
@@ -155,15 +171,17 @@ EOT
 
 #======================================================================================================================
 # parse positional parameters from [options]
-# Options arguments as in ${__ScriptName} [options] <install-type> [install-version]
+# Options arguments as in ${__ScriptName} [options] <install-type> [install-arguments]
 # may overwrite default variable values
 #----------------------------------------------------------------------------------------------------------------------
 
-while getopts ':hv' opt
+while getopts ':hktv' opt
 do
   case "${opt}" in
 
+    k )  _DELETE_DOWNLOADED_FILES=${_FALSE}             ;;
     h )  __usage; exit 0                                ;;
+    t )  _KEEP_TEMP_FILES=${_TRUE}                      ;;
     v )  echo "$0 -- Version $__ScriptVersion"; exit 0  ;;
 
     \?)  echo
@@ -176,8 +194,6 @@ do
 done
 # after this, $1 will refer to the first non-option argument passed to the script
 shift "$((OPTIND-1))"
-
-
 
 #######################################################################################################################
 #  Function declarations
@@ -571,13 +587,13 @@ __install_apt_packages() {
     fi
 
     # Update package lists
-    sudo apt-get update
+    sudo apt-get -qq update
 
     # Install the packages
-    sudo apt-get install -y "$@"
+    sudo apt-get -qq install -y "$@"
     
     if [ $? -eq 0 ]; then
-        echo "Packages installed successfully."
+        echo "Packages $@ installed."
     else
         echo "Error: Failed to install some packages."
         return 3
@@ -602,16 +618,21 @@ Example:
 __install_fnm() {
     # Set and export the FNM_DIR variable
     export FNM_DIR=${FNM_DIR}
+    export PATH=$FNM_DIR:$PATH
 
-    # Append the setting to root's .bashrc for persistence
-    echo "export FNM_DIR=${FNM_DIR}" >> /root/.bashrc #todo
-
-    # Download and install fnm
-    if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /opt/fnm; then
-        echo "fnm installed successfully."
+    if command -v fnm > /dev/null 2>&1; then
+        echo "fnm is already installed."
     else
-        echo "Error: Failed to install fnm."
-        return 1
+        # Append the setting to root's .bashrc for persistence
+        echo "export FNM_DIR=${FNM_DIR}" >> /root/.bashrc #todo
+
+        # Download and install fnm
+        if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir /opt/fnm; then
+            echo "fnm installed successfully."
+        else
+            echo "Error: Failed to install fnm."
+            return 1
+        fi
     fi
 
 } # ----------  end of function __install_fnm  ----------
@@ -680,21 +701,33 @@ This function performs the following steps:
 4. Cleans up temporary files and directories.
 '
 __download_and_extract_package() {
-    local SELECTED_URL="$1"
+    local SELECTED_URL="$1" #todo check if global variable should/could be used
 
     # download the update
-    wget "$SELECTED_URL" -O /tmp/companion-package.tar.gz -q  --show-progress
+    # --timestamping or -N does not work without -c with --output-document
+    wget --timestamping  "$SELECTED_URL" -c --output-document=/tmp/companion-package.tar.gz -q  --show-progress
 
     # extract download
     rm -R -f /tmp/companion-package
     mkdir /tmp/companion-package
     tar -xzf /tmp/companion-package.tar.gz --strip-components=1 -C /tmp/companion-package
-    rm /tmp/companion-package.tar.gz
+    if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then
+        rm /tmp/companion-package.tar.gz
+    fi
 
     # copy across the useful files
     rm -R -f ${COMPANION_INSTALL_FOLDER}
-    mv /tmp/companion-package/resources ${COMPANION_INSTALL_FOLDER}
-    rm -R /tmp/companion-package
+    if [ ${_KEEP_TEMP_FILES} -eq ${_TRUE} ]; then
+        # We're being told not to move files, instead copy them so we can keep
+        # them around
+        cp -r /tmp/companion-package/resources "${COMPANION_INSTALL_FOLDER}"
+        return $? #todo
+    else
+        mv /tmp/companion-package/resources "${COMPANION_INSTALL_FOLDER}"
+        rm -R /tmp/companion-package
+        return $? #todo
+    fi
+
 } # ----------  end of function __download_and_extract_package  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
@@ -839,8 +872,8 @@ __fetch_latest_uri
 Fetch the latest URI for a given API URL and version.
 
 Parameters:
-$1: COMPANION_API_URL - The API URL to fetch data from.
-$2: IVERSION - The version of interest.
+$1: COMPANION_API_PACKAGES_URL - The API URL to fetch data from.
+$2: COMPANIONPI_INSTALLATION_VERSION - The version of interest.
 
 Returns:
 The latest URI matching the provided version.
@@ -849,25 +882,27 @@ Prerequisites:
 Assumes the availability of the __determine_package_target and __parse_semver functions.
 '
 __fetch_latest_uri() {
-    #local COMPANION_API_URL="$1"
-    #local IVERSION="$2"
+    #local COMPANION_API_PACKAGES_URL="$1"
+    #local COMPANIONPI_INSTALLATION_VERSION="$2"
     local URI
     local version
     local target
-    version="$(__parse_semver "${IVERSION}" "major")"
+    version="$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major")"
     target="$(__determine_package_target "$version")"
-    URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$target"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
+    URI=$(curl -s "$COMPANION_API_PACKAGES_URL" | jq  --arg target "$target"  --arg version "$COMPANIONPI_INSTALLATION_VERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
     
     echo "$URI"
 } # ----------  end of function __fetch_latest_uri  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#todo explain
 preinstall_3.0.0() {
     echo "~~PRE~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#todo explain
 postinstall_3.0.0() {
     echo "~~POST~3.0.0~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 }
@@ -875,31 +910,35 @@ postinstall_3.0.0() {
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #######################################################????????????????todo
-main_install_packaged_v3() {
-    local URI=$(__fetch_latest_uri)
-    if declare -Ff "preinstall_$(__parse_semver "${IVERSION}" "all")" > /dev/null; then
-        "preinstall_$(__parse_semver "${IVERSION}" "all")"
+install_packaged_v3() {
+
+    # if a preinstall function exists for this version/branch then execute it
+    if declare -Ff "preinstall_$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "all")" > /dev/null; then
+        "preinstall_$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "all")"
     fi
-    if [[ "$URI" && "$URI" != "null" ]]; then
-        #__download_and_extract_package "$(__fetch_latest_uri)"
+
+    # todo more checks? Or is the COMPANION_PACKAGE_URL the culmination of the other checks?
+    # todo check influence of global declaration
+    if [[ "$COMPANION_PACKAGE_URL" && "$COMPANION_PACKAGE_URL" != "null" ]]; then
+        __download_and_extract_package "$COMPANION_PACKAGE_URL"
+exit 0
         __setup_node_with_fnm
         cd ${COMPANION_INSTALL_FOLDER}
-        echo "$PATH"
-        command -v npm
         npm --unsafe-perm install -g yarn #&>/dev/null #todo errorhandlign
-        #__install_apt_packages "${COMPANION_DEPS[@]}"
-        __copy_semantic_versioned_file "${IVERSION}" "companion.service" "/etc/systemd/system"
+        __install_apt_packages "${COMPANION_DEPS[@]}"
+        __copy_semantic_versioned_file "${COMPANIONPI_INSTALLATION_VERSION}" "companion.service" "/etc/systemd/system"
         #systemctl daemon-reload
+        #systemctl enable companion
         __create_symlinks
         __create_motd_symlink
-        #systemctl enable companion
-        if declare -Ff "postinstall_$(__parse_semver "${IVERSION}" "all")" > /dev/null; then
-            "postinstall_$(__parse_semver "${IVERSION}" "all")"
+
+        # if a postinstall function exists for this version/branch then execute it
+        if declare -Ff "postinstall_$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "all")" > /dev/null; then
+            "postinstall_$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "all")"
         fi
 
     else
-        #todo use (global) variables instead of function calls
-        echo "No matching package found for target: $(__determine_package_target $(__parse_semver "${IVERSION}" "major")) and version: $IVERSION"
+        echo "No matching package found for target: $COMPANION_PACKAGE_TARGET and version: $COMPANIONPI_INSTALLATION_VERSION"
         exit 1
     fi
 } # ----------  end of function install_packaged  ----------
@@ -945,40 +984,40 @@ echo -e "\n\e[1m ----- determine machine, environment, installation type and ver
 
 # Determine installation-type from the argument
 if [ "$#" -gt 0 ];then
-    ITYPE=$1
+    COMPANIONPI_INSTALLATION_TYPE=$1
     shift
 fi
 
-# do we have a supported value for $ITYPE?
+# do we have a supported value for $COMPANIONPI_INSTALLATION_TYPE?
 # looping the array for match (verbose but intuitive)
 is_valid_type=0
 for type in "${COMPANION_VALID_INSTALL_TYPES[@]}"; do
-    if [[ "$ITYPE" == "$type" ]]; then
+    if [[ "$COMPANIONPI_INSTALLATION_TYPE" == "$type" ]]; then
         is_valid_type=1
         break
     fi
 done
 # Use the result of the check in a condition
 if [[ "$is_valid_type" -eq 0 ]]; then
-    echo "Invalid ITYPE value."
+    echo "Invalid COMPANIONPI_INSTALLATION_TYPE value."
     # Handle the invalid case here
     exit 1
 fi
 
 # # placeholder for explicit code
-# if [ "$ITYPE" = "stable" ]; then
+# if [ "$COMPANIONPI_INSTALLATION_TYPE" = "stable" ]; then
 # :
-# elif [ "$ITYPE" = "beta" ]; then
+# elif [ "$COMPANIONPI_INSTALLATION_TYPE" = "beta" ]; then
 # :
-# elif [ "$ITYPE" = "experimental" ]; then
+# elif [ "$COMPANIONPI_INSTALLATION_TYPE" = "experimental" ]; then
 # :
 # fi
 
-# If no version is given get the latest from COMPANION_API_URL as per .published timestamp
+# If no version is given get the latest from COMPANION_API_PACKAGES_URL as per .published timestamp
 if [ "$#" -eq 0 ];then
-    IVERSION=$(__get_latest_version "${COMPANION_API_URL}" "$(__determine_package_target)" )
+    COMPANIONPI_INSTALLATION_VERSION=$(__get_latest_version "${COMPANION_API_PACKAGES_URL}" "$(__determine_package_target)" )
 else
-    IVERSION="$1"
+    COMPANIONPI_INSTALLATION_VERSION="$1"
     shift
 fi
 
@@ -991,14 +1030,18 @@ if [ "$#" -gt 0 ]; then
 fi
 
 # updating the global variable
-COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${ITYPE}&limit=999"
+COMPANION_API_PACKAGES_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=${COMPANIONPI_INSTALLATION_TYPE}&limit=999"
 
-target="$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"
+COMPANION_PACKAGE_TARGET="$(__determine_package_target $(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major"))"
+COMPANION_PACKAGE_URL="$(__fetch_latest_uri)"
 
-echo "$COMPANION_API_URL"
-echo "${IVERSION}"
-echo "$ITYPE"
-echo "target: ${target}"
+echo "COMPANIONPI_INSTALLATION_TYPE: ${COMPANIONPI_INSTALLATION_TYPE}"
+echo "COMPANIONPI_INSTALLATION_VERSION: ${COMPANIONPI_INSTALLATION_VERSION}"
+echo "COMPANION_PACKAGE_TARGET: ${COMPANION_PACKAGE_TARGET}"
+echo "COMPANION_API_PACKAGES_URL: ${COMPANION_API_PACKAGES_URL}"
+echo "COMPANION_PACKAGE_URL: ${COMPANION_PACKAGE_URL}"
+if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then echo "downloaded files will be deleted"; else echo "downloaded files will NOT be deleted"; fi
+if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then echo "temp files will NOT be deleted"; else echo "temp files will be deleted"; fi
 
 #----------------------------------------------------------------------------------------------------------------------
 # End of determine machine, environment, installation type and version-to-install
@@ -1014,15 +1057,15 @@ echo -e "\n\e[1m ----- installation\e[0m"
 
 # If this script is run, but not sourced:
 if [[ $0 == "$BASH_SOURCE" ]]; then
-    if __is_version_lt_2_4_2 "${IVERSION}"; then
-        echo "Version ${IVERSION} does not meet the specified criteria."
+    if __is_version_lt_2_4_2 "${COMPANIONPI_INSTALLATION_VERSION}"; then
+        echo "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
         exit 1
         #todo make work for stable-2.* branches
-    elif [ "$(__parse_semver "${IVERSION}" "major")" -ge "4" ]; then
-        echo "Version ${IVERSION} does not meet the specified criteria."
+    elif [ "$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major")" -ge "4" ]; then
+        echo "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
         exit 1
     else
-        main_install_packaged_v3
+        install_packaged_v3
     fi
 fi
 
@@ -1037,6 +1080,8 @@ fi
 #----------------------------------------------------------------------------------------------------------------------
 
 echo -e "\n\e[1m ----- cleanup\e[0m"
+
+# todo: How to handle downloaded file?
 
 #######################################################################################################################
 
