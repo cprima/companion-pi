@@ -19,6 +19,7 @@ exit_handler() {
     local exit_code="$?"
     if [ "$exit_code" -ne 0 ]; then
         echo "Error occurred in script. Last command exited with: $exit_code"
+        echo "Collected logfile:"
         cat "$_LOGFILE"
     fi
     # echo "===== Displaying Log =====" #todo formatting
@@ -1333,6 +1334,11 @@ ToDo
 - check if default values could go into systemd service file companion.service
 - systemd must use node from fnm
 - use more _log
+- how to backup as-is config?
+- print warnings and get confirmations before deletions
+- figure out the meaning of config /home/companion/companion
+- mkdir v3.0.0-xyz bug
+- define the target users (packers, manual installers)
 - …
 
 
@@ -1341,7 +1347,17 @@ ToDo
 #todo use global variable
 echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashrc
 
+Brainstorm
 
+./companionpi-ng.sh install stable v3.0.0
+./companionpi-ng.sh install -k git v2.4
+./companionpi-ng.sh backup
+./companionpi-ng.sh remove
+./companionpi-ng.sh reset
+./companionpi-ng.sh update latest
+./companionpi-ng.sh update v2
+./companionpi-ng.sh packer raspbian
+./companionpi-ng.sh packer dietpi
 
 Styleguide
 
