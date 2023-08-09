@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2016
 
 #######################################################################################################################
 # CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
@@ -33,17 +34,18 @@ __ScriptArgs="$*"
 
 #======================================================================================================================
 #  Defaults for options arguments.
-#  Options arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
+#  Options arguments as in ${__ScriptName} [options] <install-type> [install-version]
 #----------------------------------------------------------------------------------------------------------------------
 # todo
 #======================================================================================================================
 
 
 #======================================================================================================================
-#  Defaults for install type arguments.
-#  Install type arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
+#  Defaults for install-type and install-version arguments.
+#  Install type arguments as in ${__ScriptName} [options] <install-type> [install-version]
 #----------------------------------------------------------------------------------------------------------------------
 ITYPE="stable"
+IVERSION="v3.0.0"
 #unused COMPANION_LATEST_VERSION="v3.0.0" #todo replace with function call
 #======================================================================================================================
 
@@ -51,6 +53,7 @@ ITYPE="stable"
 #======================================================================================================================
 #  Environment variables taken into account.
 #----------------------------------------------------------------------------------------------------------------------
+# todo
 #   COMPANION_BUILD:          Install a specific stable build
 #   COMPANIONPI_BRANCH:       Development only: Allow building using a testing branch of this updater
 #======================================================================================================================
@@ -59,7 +62,7 @@ ITYPE="stable"
 #======================================================================================================================
 #  Other default values.
 #  It is explicitly encouraged to use getopts options below to overwrite these default values.
-#  Options as in ${__ScriptName} [options] <install-type> [install-type-args]
+#  Options as in ${__ScriptName} [options] <install-type> [install-version]
 #----------------------------------------------------------------------------------------------------------------------
 # Packages required to run this install script (stored as an array)
 COMPANIONPI_DEPS=("git" "curl" "jq") # "zip" "unzip"
@@ -118,7 +121,7 @@ echo -e "\n\e[1m ----- Going to parse arguments, possibly overwriting variable d
 __usage() {
     cat << EOT
 
-  Usage :  ${__ScriptName} [options] <install-type> [install-type-args]
+  Usage :  ${__ScriptName} [options] <install-type> [install-version]
 
   Installation types:
     - stable                   Install latest stable release. This is the default install type.
@@ -152,7 +155,7 @@ EOT
 
 #======================================================================================================================
 # parse positional parameters from [options]
-# Options arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
+# Options arguments as in ${__ScriptName} [options] <install-type> [install-version]
 # may overwrite default variable values
 #----------------------------------------------------------------------------------------------------------------------
 
@@ -275,10 +278,13 @@ Example:
 '
 __is_version_lt_2_4_2() {
     local version="$1"
+    local major
+    local minor
+    local patch
 
-    local major=$(__parse_semver "$version" "major")
-    local minor=$(__parse_semver "$version" "minor")
-    local patch=$(__parse_semver "$version" "patch")
+    major=$(__parse_semver "$version" "major")
+    minor=$(__parse_semver "$version" "minor")
+    patch=$(__parse_semver "$version" "patch")
 
     if [[ $major -lt 2 ]] || 
        [[ $major -eq 2 && $minor -lt 4 ]] || 
@@ -354,11 +360,15 @@ Description:
 '
 __copy_semantic_versioned_file() {    
     local version="$1"
-    local major=$(__parse_semver "$version" "major")
-    local minor=$(__parse_semver "$version" "minor")
-    local patch=$(__parse_semver "$version" "patch")
+    local major
+    local minor
+    local patch
     local file="$2"
     local targetfolder="$3"
+
+    major=$(__parse_semver "$version" "major")
+    minor=$(__parse_semver "$version" "minor")
+    patch=$(__parse_semver "$version" "patch")
 
     # Clone the repo and cd into it
     #git clone "$repo_url" cloned_repo
@@ -730,6 +740,10 @@ Create symbolic links for all scripts in the COMPANION_SCRIPTS_TO_SYMLINK array.
 Usage:
     create_symlinks [source_directory]
 
+Globals:
+    COMPANION_SCRIPTS_TO_SYMLINK
+    #…
+
 Parameters:
     source_directory: Optional. The directory containing the scripts to be linked. Defaults to "/usr/local/src/companionpi".
 
@@ -742,6 +756,7 @@ Description:
 # create_symlinks "/path/to/other/source/directory"
 '
 __create_symlinks() {
+    #todo use global variable
     local src_dir="${1:-/usr/local/src/companionpi}"
     
     for script in "${COMPANION_SCRIPTS_TO_SYMLINK[@]}"; do
@@ -767,7 +782,8 @@ Description:
 # or
 # create_motd_symlink "/path/to/other/source/directory"
 '
-__create_motd_symlink() {    
+__create_motd_symlink() {
+    #todo use global variable
     local src_dir="${1:-/usr/local/src/companionpi}"
     
     ln -s -f "$src_dir/motd" "/etc/motd"
@@ -835,9 +851,12 @@ Assumes the availability of the __determine_package_target and __parse_semver fu
 __fetch_latest_uri() {
     #local COMPANION_API_URL="$1"
     #local IVERSION="$2"
-    
     local URI
-    URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
+    local version
+    local target
+    version="$(__parse_semver "${IVERSION}" "major")"
+    target="$(__determine_package_target "$version")"
+    URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$target"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
     
     echo "$URI"
 } # ----------  end of function __fetch_latest_uri  ----------
@@ -865,8 +884,8 @@ main_install_packaged_v3() {
         #__download_and_extract_package "$(__fetch_latest_uri)"
         __setup_node_with_fnm
         cd ${COMPANION_INSTALL_FOLDER}
-        echo $PATH
-        which npm
+        echo "$PATH"
+        command -v npm
         npm --unsafe-perm install -g yarn #&>/dev/null #todo errorhandlign
         #__install_apt_packages "${COMPANION_DEPS[@]}"
         __copy_semantic_versioned_file "${IVERSION}" "companion.service" "/etc/systemd/system"
@@ -879,6 +898,7 @@ main_install_packaged_v3() {
         fi
 
     else
+        #todo use (global) variables instead of function calls
         echo "No matching package found for target: $(__determine_package_target $(__parse_semver "${IVERSION}" "major")) and version: $IVERSION"
         exit 1
     fi
@@ -895,20 +915,20 @@ main_install_packaged_v3() {
 #----------------------------------------------------------------------------------------------------------------------
 echo -e "\n\e[1m ----- satisfy requirements for installer script\e[0m"
 
-if [ $(/usr/bin/id -u) -ne 0 ]; then
+if [ "$(/usr/bin/id -u)" -ne 0 ]; then
     echo "Must be run as root"
     exit 1
 fi
 
-# # the following code depends on some packages, like git or jq.
-#__install_apt_packages "${COMPANIONPI_DEPS[@]}"
+# the following code depends on some packages, like git or jq.
+__install_apt_packages "${COMPANIONPI_DEPS[@]}"
 
-# # get installer repo and software repo into /usr/local/src/ 
-#__clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
-#__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
+# get installer repo and software repo into /usr/local/src/ 
+__clone_or_update_repo "${COMPANIONPI_REPO_URL}" "${COMPANIONPI_CLONE_FOLDER}" "${COMPANIONPI_REPO_BRANCH}"
+__clone_or_update_repo "${COMPANION_REPO_URL}" "${COMPANION_CLONE_FOLDER}" "${COMPANION_REPO_BRANCH}"
 
-# # The Fast and simple Node.js version Manager, instructed to work on the file .node-version
-#__install_fnm
+# The Fast and simple Node.js version Manager, instructed to work on the file .node-version
+__install_fnm
 
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -975,7 +995,7 @@ COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=
 
 target="$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"
 
-echo $COMPANION_API_URL
+echo "$COMPANION_API_URL"
 echo "${IVERSION}"
 echo "$ITYPE"
 echo "target: ${target}"
