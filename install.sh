@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#======================================================================================================================
+#######################################################################################################################
 # CompanionPi: Tooling to generate an image or to install Companion (https://bitfocus.io/companion)
 # Copyright (c) …
 # Licensed under the MIT License. See LICENSE file in the project root for full license information.
@@ -9,9 +9,11 @@
 #----------------------------------------------------------------------------------------------------------------------
 # Usage: curl https://raw.githubusercontent.com/bitfocus/companion-pi/main/install.sh | bash -s -- stable v3.0.0
 # Developer Notes at the bottom
-#======================================================================================================================
+#######################################################################################################################
 
-#======================================================================================================================
+
+
+#######################################################################################################################
 #  Variable declarations
 #----------------------------------------------------------------------------------------------------------------------
 echo -e "\n\e[1m ----- Variable declarations\e[0m"
@@ -36,6 +38,7 @@ __ScriptArgs="$*"
 # todo
 #======================================================================================================================
 
+
 #======================================================================================================================
 #  Defaults for install type arguments.
 #  Install type arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
@@ -55,7 +58,8 @@ ITYPE="stable"
 
 #======================================================================================================================
 #  Other default values.
-#  It is explicitly encouraged to use getopts below to overwrite these default values.
+#  It is explicitly encouraged to use getopts options below to overwrite these default values.
+#  Options as in ${__ScriptName} [options] <install-type> [install-type-args]
 #----------------------------------------------------------------------------------------------------------------------
 # Packages required to run this install script (stored as an array)
 COMPANIONPI_DEPS=("git" "curl" "jq") # "zip" "unzip"
@@ -68,6 +72,7 @@ COMPANION_VALID_INSTALL_TYPES=("stable" "beta" "experimental")
 # system groups to add the companion user to (stored as an array)
 COMPANION_USER_GROUPS=("gpio" "dialout")
 ##############todo COMPANION_USER_NAME
+#COMPANION_USER_NAME?????????
 # Default URL where to fetch 
 COMPANION_API_URL="https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999"
 # todo check if names or paths
@@ -81,25 +86,35 @@ COMPANIONPI_REPO_URL="https://github.com/bitfocus/companion-pi"
 COMPANIONPI_REPO_URL="https://github.com/cprima/companion-pi"
 #todo env var and default value
 COMPANIONPI_REPO_BRANCH="main"
-COMPANIONPI_REPO_BRANCH="dev-cpm"
+COMPANIONPI_REPO_BRANCH="dev-cpm" #todo remove
 COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi"
-COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi-ng"
-COMPANIONPI_CLONE_FOLDER="/mnt/d/github.com/cprima/companion-pi"
+COMPANIONPI_CLONE_FOLDER="/usr/local/src/companionpi-ng" #todo remove
+COMPANIONPI_CLONE_FOLDER="/mnt/d/github.com/cprima/companion-pi" #todo remove
 COMPANION_INSTALL_FOLDER="/opt/companion"
 
 # fnm read the environment variable as its base-dir for the root directory of fnm installations
 FNM_DIR=/opt/fnm
 export FNM_DIR=${FNM_DIR} 
 
-#======================================================================================================================
+#----------------------------------------------------------------------------------------------------------------------
+# End of variable declarations
+#######################################################################################################################
 
 
 
+#######################################################################################################################
+#  Parse arguments, possibly overwriting variable declarations
+#----------------------------------------------------------------------------------------------------------------------
 
+echo -e "\n\e[1m ----- Going to parse arguments, possibly overwriting variable declarations\e[0m"
+
+# todo fix this to docstring:
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 #         NAME:  __usage
 #  DESCRIPTION:  Display usage information. Needs to be declared before getopts call.
+#                Early declaration for use in getopts. Also some prominently visible initial documentation.
 #----------------------------------------------------------------------------------------------------------------------
+
 __usage() {
     cat << EOT
 
@@ -134,10 +149,13 @@ __usage() {
 EOT
 }   # ----------  end of function __usage  ----------
 
-echo -e "\n\e[1m ----- Going to parse arguments, possibly overwriting variable declarations\e[0m"
 
+#======================================================================================================================
 # parse positional parameters from [options]
+# Options arguments as in ${__ScriptName} [options] <install-type> [install-type-args]
 # may overwrite default variable values
+#----------------------------------------------------------------------------------------------------------------------
+
 while getopts ':hv' opt
 do
   case "${opt}" in
@@ -157,47 +175,16 @@ done
 shift "$((OPTIND-1))"
 
 
-#----------------------------------------------------------------------------------------------------------------------
-# End of variable declarations
-#======================================================================================================================
 
-
-
-
-#======================================================================================================================
+#######################################################################################################################
 #  Function declarations
 #----------------------------------------------------------------------------------------------------------------------
 echo -e "\n\e[1m ----- function declarations\e[0m"
 
 
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
-#         NAME:  __foo
-#  DESCRIPTION:  Template
-#----------------------------------------------------------------------------------------------------------------------
-: '
-__foo
-
-Description…
-
-Parameters:
-    $1 - if used
-
-Return:
-    Returns…
-
-Example:
-    someval=$(__foo)
-    echo "$someval"
-'
-__foo() {
-    echo foo
-}   # ----------  end of function __foo  ----------
-
-
-
-#----------------------------------------------------------------------------------------------------------------------
+#======================================================================================================================
 #--helper functions----------------------------------------------------------------------------------------------------
-#----------------------------------------------------------------------------------------------------------------------
+#======================================================================================================================
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
@@ -302,10 +289,7 @@ __is_version_lt_2_4_2() {
     fi
 } # ----------  end of function __is_version_lt_2_4_2  ----------
 
-
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-
 : '
 __append_in_bashrc_to_path
 
@@ -327,7 +311,6 @@ Description:
     already in PATH, the function appends it. If it is already present, a message 
     indicating the same is displayed.
 '
-
 __append_in_bashrc_to_path() {
 
     local new_dir="$1"
@@ -393,11 +376,9 @@ __copy_semantic_versioned_file() {
 } # ----------  end of __copy_semantic_versioned_file  ----------
 
 
-
-#----------------------------------------------------------------------------------------------------------------------
+#======================================================================================================================
 #--installer functions-------------------------------------------------------------------------------------------------
-#----------------------------------------------------------------------------------------------------------------------
-
+#======================================================================================================================
 
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
@@ -419,7 +400,6 @@ Example:
     target=$(__determine_package_target)
     echo "$target"
 '
-#----------------------------------------------------------------------------------------------------------------------
 __determine_package_target() {
     local machine
     local os
@@ -468,11 +448,6 @@ __determine_package_target() {
 
 }   # ----------  end of function __determine_package_target  ----------
 
-
-
-
-
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
 __get_latest_version
@@ -502,9 +477,6 @@ __get_latest_version() {
     version=$(curl -s "$API_ENDPOINT" | jq --arg target "$TARGET" -r '[.packages[] | select(.target == $target)] | sort_by(.published) | last | .version // "Error: Target not found in API results"')
     echo "$version"
 } # ----------  end of function __get_latest_version  ----------
-
-
-
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -559,9 +531,6 @@ __create_user_with_groups() {
 
 } # ----------  end of function __create_user_with_groups  ----------
 
-
-
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
 __install_apt_packages
@@ -578,7 +547,6 @@ Example:
     packages=("curl" "git" "vim")
     __install_apt_packages "${packages[@]}"
 '
-
 __install_apt_packages() {
     # Check if apt-get is available
     if ! command -v apt-get &> /dev/null; then
@@ -606,8 +574,6 @@ __install_apt_packages() {
     fi
 } # ----------  end of function __install_apt_packages  ----------
 
-
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
 __install_fnm
@@ -623,7 +589,6 @@ Return:
 Example:
     __install_fnm
 '
-
 __install_fnm() {
     # Set and export the FNM_DIR variable
     export FNM_DIR=${FNM_DIR}
@@ -640,8 +605,6 @@ __install_fnm() {
     fi
 
 } # ----------  end of function __install_fnm  ----------
-
-
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -663,7 +626,6 @@ If the target directory exists but does not contain a Git repository, an error w
 
 Example:
     '
-
 __clone_or_update_repo() {
     local repo_url="$1"
     local target_dir="$2"
@@ -687,8 +649,6 @@ __clone_or_update_repo() {
     fi
 } # ----------  end of function __clone_or_update_repo  ----------
 
-
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
 __download_and_extract_package
@@ -709,7 +669,6 @@ This function performs the following steps:
 3. Moves the extracted resources to the /opt/companion directory.
 4. Cleans up temporary files and directories.
 '
-
 __download_and_extract_package() {
     local SELECTED_URL="$1"
 
@@ -727,8 +686,6 @@ __download_and_extract_package() {
     mv /tmp/companion-package/resources ${COMPANION_INSTALL_FOLDER}
     rm -R /tmp/companion-package
 } # ----------  end of function __download_and_extract_package  ----------
-
-
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -763,7 +720,6 @@ __install_update_prompt() {
     yarn --cwd "$cwd" --silent install
 }
 
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 # Declare global variable
 #########COMPANION_SCRIPTS_TO_SYMLINK=("companion-license" "companion-help" "companion-update" "companion-reset")
@@ -780,6 +736,10 @@ Parameters:
 Description:
     This function iterates over the global COMPANION_SCRIPTS_TO_SYMLINK array and creates symbolic links 
     from the specified source directory (or the default if none is provided) to the /usr/local/bin/ directory for each script.
+# Example usage:
+# create_symlinks
+# or
+# create_symlinks "/path/to/other/source/directory"
 '
 __create_symlinks() {
     local src_dir="${1:-/usr/local/src/companionpi}"
@@ -787,44 +747,31 @@ __create_symlinks() {
     for script in "${COMPANION_SCRIPTS_TO_SYMLINK[@]}"; do
         ln -s -f "$src_dir/$script" "/usr/local/bin/$script"
     done
-}
-
-# Example usage:
-# create_symlinks
-# or
-# create_symlinks "/path/to/other/source/directory"
-
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
+} # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-__create_motd_symlink() {
-    : '
-    Create a symbolic link for the motd file.
+: '
+Create a symbolic link for the motd file.
 
-    Usage:
-        create_motd_symlink [source_directory]
+Usage:
+    create_motd_symlink [source_directory]
 
-    Parameters:
-        source_directory: Optional. The directory containing the motd file to be linked. Defaults to "/usr/local/src/companionpi".
+Parameters:
+    source_directory: Optional. The directory containing the motd file to be linked. Defaults to "/usr/local/src/companionpi".
 
-    Description:
-        This function creates a symbolic link from the specified source directory (or the default if none is provided) 
-        for the motd file to the /etc/motd location.
-    '
-    
-    local src_dir="${1:-/usr/local/src/companionpi}"
-    
-    ln -s -f "$src_dir/motd" "/etc/motd"
-}
-
+Description:
+    This function creates a symbolic link from the specified source directory (or the default if none is provided) 
+    for the motd file to the /etc/motd location.
 # Example usage:
 # create_motd_symlink
 # or
 # create_motd_symlink "/path/to/other/source/directory"
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
-
+'
+__create_motd_symlink() {    
+    local src_dir="${1:-/usr/local/src/companionpi}"
+    
+    ln -s -f "$src_dir/motd" "/etc/motd"
+} # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -867,9 +814,7 @@ __setup_node_with_fnm() {
 
     # Update PATH to include the Node binaries
     export PATH="${FNM_DIR}/aliases/companion/bin:$PATH"
-}
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
+} # ----------  end of function __is_version_lt_2_4_2  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 : '
@@ -895,22 +840,7 @@ __fetch_latest_uri() {
     URI=$(curl -s "$COMPANION_API_URL" | jq  --arg target "$(__determine_package_target $(__parse_semver "${IVERSION}" "major"))"  --arg version "$IVERSION" -r '[.packages[] | select(.target == $target and .version == $version)] | sort_by(.published) | last | .uri')
     
     echo "$URI"
-}
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
-
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
-
-#---  FUNCTION  -------------------------------------------------------------------------------------------------------
-
-# ----------  end of function __is_version_lt_2_4_2  ----------
-
-
-
-
-
+} # ----------  end of function __fetch_latest_uri  ----------
 
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
 preinstall_3.0.0() {
@@ -924,13 +854,8 @@ postinstall_3.0.0() {
 }
 # ----------  end of function __is_version_lt_2_4_2  ----------
 
-
-
-
-
-
 #---  FUNCTION  -------------------------------------------------------------------------------------------------------
-
+#######################################################????????????????todo
 main_install_packaged_v3() {
     local URI=$(__fetch_latest_uri)
     if declare -Ff "preinstall_$(__parse_semver "${IVERSION}" "all")" > /dev/null; then
@@ -959,16 +884,13 @@ main_install_packaged_v3() {
     fi
 } # ----------  end of function install_packaged  ----------
 
-
 #----------------------------------------------------------------------------------------------------------------------
 #  End of function declarations
-#======================================================================================================================
+#######################################################################################################################
 
 
 
-
-
-#======================================================================================================================
+#######################################################################################################################
 #  Satisfy requirements for this installer script
 #----------------------------------------------------------------------------------------------------------------------
 echo -e "\n\e[1m ----- satisfy requirements for installer script\e[0m"
@@ -990,14 +912,15 @@ fi
 
 
 #----------------------------------------------------------------------------------------------------------------------
-# 
-#======================================================================================================================
+# End of satisfy requirements for this installer script
+#######################################################################################################################
 
 
 
-#======================================================================================================================
+#######################################################################################################################
 #  Determine machine, environment, installation type and version-to-install
 #----------------------------------------------------------------------------------------------------------------------
+
 echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
 
 # Determine installation-type from the argument
@@ -1058,17 +981,16 @@ echo "$ITYPE"
 echo "target: ${target}"
 
 #----------------------------------------------------------------------------------------------------------------------
-# 
-#======================================================================================================================
+# End of determine machine, environment, installation type and version-to-install
+#######################################################################################################################
 
 
 
-#======================================================================================================================
+#######################################################################################################################
 #  Installation
 #----------------------------------------------------------------------------------------------------------------------
+
 echo -e "\n\e[1m ----- installation\e[0m"
-
-
 
 # If this script is run, but not sourced:
 if [[ $0 == "$BASH_SOURCE" ]]; then
@@ -1086,17 +1008,17 @@ fi
 
 #----------------------------------------------------------------------------------------------------------------------
 # End of Installation
-#======================================================================================================================
+#######################################################################################################################
 
 
 
-#======================================================================================================================
+#######################################################################################################################
 #  Cleanup
 #----------------------------------------------------------------------------------------------------------------------
+
 echo -e "\n\e[1m ----- cleanup\e[0m"
 
-
-#======================================================================================================================
+#######################################################################################################################
 
 exit 0
 
@@ -1128,14 +1050,6 @@ echo "export PATH=/opt/fnm/aliases/default/bin:\$PATH" >> /home/companion/.bashr
 
 exit 0
 
-# echo -e "\n\e[1m ----- variable declarations\e[0m"
-# echo -e "\n\e[1m ----- function declarations\e[0m"
-# echo -e "\n\e[1m ----- satisfy requirements for installer\e[0m"
-# echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
-# echo -e "\n\e[1m ----- installation\e[0m"
-# echo -e "\n\e[1m ----- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\e[0m"
-# echo -e "\n\e[1m ----- cleanup\e[0m"
-
 
 #======================================================================================================================
 #  Developer Notes
@@ -1148,9 +1062,9 @@ Anatomy of this script:
 2. parse arguments, possibly overwriting variable declarations
 3. function declarations
 4. satisfy requirements for installer script (incl. root)
-4.1. 
-4.2. 
-4.3. 
+4.1. clone companionpi repo
+4.2. clone companion repo
+4.3. install fnm ????????????and configure its use? todo
 4.4. 
 5. determine machine, environment, installation type and version-to-install 
 6. 
@@ -1162,40 +1076,11 @@ Anatomy of this script:
 7.4. administrate system for companion (systemd, launch, helper scripts, …)
 8. cleanup
 
-
-
-# outline:
-# 
-# prep install
-# - clone companionpi repo
-# - clone companion repo
-# - install fnm and configure its use
-# parse arguments and commands
-# determine which version the user wants to be installed, fallback to latest
-# ensure prerequisites are met
-# - if v3 is in https://api.bitfocus.io/v1/product/companion/packages?branch=stable&limit=999
-# - todo: v2
-# - install packages
-# - 
-# install
-# configure
-# - add user
-# cleanup
-
-# todo: bail if wrong OS / machine
-
-
 Styleguide
 
 usage of a multiline string (enclosed with : ' ... '), which is a common way in Bash to create block comments that can serve as function-level documentation or docstrings.
 
 '
-#======================================================================================================================
-
-
-
-
-
 #######################################################################################################################
 #======================================================================================================================
 #**********************************************************************************************************************
@@ -1208,3 +1093,54 @@ usage of a multiline string (enclosed with : ' ... '), which is a common way in 
 #----------------------------------------------------------------------------------------------------------------------
 #======================================================================================================================
 #######################################################################################################################
+
+
+
+# echo -e "\n\e[1m ----- variable declarations\e[0m"
+# echo -e "\n\e[1m ----- function declarations\e[0m"
+# echo -e "\n\e[1m ----- satisfy requirements for installer\e[0m"
+# echo -e "\n\e[1m ----- determine machine, environment, installation type and version-to-install\e[0m"
+# echo -e "\n\e[1m ----- installation\e[0m"
+# echo -e "\n\e[1m ----- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\e[0m"
+# echo -e "\n\e[1m ----- cleanup\e[0m"
+
+
+
+
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+#         NAME:  __template
+#  DESCRIPTION:  Template
+#----------------------------------------------------------------------------------------------------------------------
+: '
+__template
+
+Description…
+
+Globals:
+    FOO_BAR_BAZ: some explanation
+
+Parameters:
+    $1 - if used
+
+Return:
+    Returns…
+
+Example:
+    someval=$(__template)
+    echo "$someval"
+'
+__template() {
+    echo "template"
+}   # ----------  end of function __template  ----------
+
+
+
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+
+# ----------  end of function __is_version_lt_2_4_2  ----------
+
+#---  FUNCTION  -------------------------------------------------------------------------------------------------------
+
+# ----------  end of function __is_version_lt_2_4_2  ----------
