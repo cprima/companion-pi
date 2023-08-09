@@ -1339,6 +1339,7 @@ ToDo
 - figure out the meaning of config /home/companion/companion
 - mkdir v3.0.0-xyz bug
 - define the target users (packers, manual installers)
+- what is the significance of the github workflow packer
 - …
 
 
