@@ -15,14 +15,16 @@
 # Exit the script immediately if any command returns a non-zero status (i.e., if any command fails).
 set -e
 
-error_handler() {
+exit_handler() {
     local exit_code="$?"
     if [ "$exit_code" -ne 0 ]; then
         echo "Error occurred in script. Last command exited with: $exit_code"
     fi
+    echo "===== Displaying Log =====" #todo formatting
+    cat "$_LOGFILE"
 }
 # Bash will execute error_handler when receiving the signal EXIT
-trap error_handler EXIT
+trap exit_handler EXIT
 
 # Treat unset variables as an error
 set -o nounset
@@ -76,7 +78,8 @@ COMPANIONPI_INSTALLATION_VERSION="v3.0.0"  #could be a branch name!
 #  It is explicitly encouraged to use getopts options below to overwrite these default values.
 #  Options as in ${__ScriptName} [options] <install-type> [install-arguments]
 #----------------------------------------------------------------------------------------------------------------------
-
+# Set a log file location
+_LOGFILE="/tmp/myscript.log"
 # If 1 then do not move temporary files, instead copy them
 _KEEP_TEMP_FILES=${_FALSE}
 # If 1 then delete e.g. the downloaded package file
@@ -233,6 +236,11 @@ echo -e "\n${_GREEN}Step 3: Function declarations${_NC}"
 #--helper functions--------------------------------------------------------------------------------------------------3-
 #====================================================================================================================3=
 
+#todo docstring
+# Log a message to both the terminal and the log file
+_log() {
+    echo "$@" | tee -a "$_LOGFILE"
+}
 
 #---  FUNCTION  -----------------------------------------------------------------------------------------------------3-
 : '
@@ -649,14 +657,14 @@ __install_fnm() {
     export PATH=$FNM_DIR:$PATH
 
     if command -v fnm > /dev/null 2>&1; then
-        echo "fnm is already installed."
+        echo "fnm is already installed in ${FNM_DIR}."
     else
         # Append the setting to root's .bashrc for persistence
         echo "export FNM_DIR=${FNM_DIR}" >> /root/.bashrc #todo
 
         # Download and install fnm
         if curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir ${FNM_DIR}; then
-            echo "fnm installed successfully."
+            echo "fnm installed successfully into ${FNM_DIR}."
         else
             echo "Error: Failed to install fnm."
             #todo check usage $?
@@ -991,6 +999,9 @@ echo "Step 3 finished."
 
 echo -e "\n${_GREEN}Step 4: Satisfy requirements for installer script${_NC}"
 
+# Clean up the log file if it already exists
+> "$_LOGFILE"
+
 if [ "$(/usr/bin/id -u)" -ne 0 ]; then
     echo "Must be run as root"
     exit 1
@@ -1074,14 +1085,14 @@ COMPANION_API_PACKAGES_URL="https://api.bitfocus.io/v1/product/companion/package
 COMPANION_PACKAGE_TARGET="$(__determine_package_target $(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major"))"
 COMPANION_PACKAGE_URL="$(__fetch_latest_uri)"
 
-echo "COMPANIONPI_INSTALLATION_TYPE: ${COMPANIONPI_INSTALLATION_TYPE}"
-echo "COMPANIONPI_INSTALLATION_VERSION: ${COMPANIONPI_INSTALLATION_VERSION}"
-echo "COMPANION_PACKAGE_TARGET: ${COMPANION_PACKAGE_TARGET}"
-echo "COMPANION_API_PACKAGES_URL: ${COMPANION_API_PACKAGES_URL}"
-echo "COMPANION_PACKAGE_URL: ${COMPANION_PACKAGE_URL}"
-echo "COMPANION_INSTALL_FOLDER: ${COMPANION_INSTALL_FOLDER}"
-if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then echo "_DELETE_DOWNLOADED_FILES: downloaded files will be deleted"; else echo "_DELETE_DOWNLOADED_FILES: downloaded files will NOT be deleted"; fi
-if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then echo "_KEEP_TEMP_FILES: temp files will NOT be deleted"; else echo "_KEEP_TEMP_FILES: temp files will be deleted"; fi
+_log "COMPANIONPI_INSTALLATION_TYPE: ${COMPANIONPI_INSTALLATION_TYPE}"
+_log "COMPANIONPI_INSTALLATION_VERSION: ${COMPANIONPI_INSTALLATION_VERSION}"
+_log "COMPANION_PACKAGE_TARGET: ${COMPANION_PACKAGE_TARGET}"
+_log "COMPANION_API_PACKAGES_URL: ${COMPANION_API_PACKAGES_URL}"
+_log "COMPANION_PACKAGE_URL: ${COMPANION_PACKAGE_URL}"
+_log "COMPANION_INSTALL_FOLDER: ${COMPANION_INSTALL_FOLDER}"
+if [ "$_DELETE_DOWNLOADED_FILES" -eq ${_TRUE} ]; then _log "_DELETE_DOWNLOADED_FILES: downloaded files will be deleted"; else _log "_DELETE_DOWNLOADED_FILES: downloaded files will NOT be deleted"; fi
+if [ "$_KEEP_TEMP_FILES" -eq ${_TRUE} ]; then _log "_KEEP_TEMP_FILES: temp files will NOT be deleted"; else _log "_KEEP_TEMP_FILES: temp files will be deleted"; fi
 
 echo "Step 5 finished."
 
@@ -1100,14 +1111,16 @@ echo -e "\n${_GREEN}Step 6: Installation.${_NC}"
 # If this script is run, but not sourced:
 if [[ $0 == "$BASH_SOURCE" ]]; then
     if __is_version_lt_2_4_2 "${COMPANIONPI_INSTALLATION_VERSION}"; then
-        echo "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
+        _log "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
         exit 1
         #todo make work for stable-2.* branches
+    # v4 not supported
     elif [ "$(__parse_semver "${COMPANIONPI_INSTALLATION_VERSION}" "major")" -ge "4" ]; then
-        echo "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
+        _log "Version ${COMPANIONPI_INSTALLATION_VERSION} does not meet the specified criteria."
         exit 1
+    # must be for v3
     else
-        echo "Going to install packaged v3 into ${COMPANION_INSTALL_FOLDER}"
+        _log "Going to install packaged v3 into ${COMPANION_INSTALL_FOLDER}"
         install_packaged_v3
     fi
 else
@@ -1129,6 +1142,7 @@ echo "Step 6 finished."
 #todo
 #echo -e "\n$_BOLD ----- cleanup$_NB"
 
+cat ${_LOGFILE} #todo remove this for prod
 
 #echo "Step 7 finished."
 
@@ -1195,6 +1209,9 @@ Anatomy of this script:
 ToDo
 
 - for each call to exit, check if return should be called. And how it relates to set -e
+- revise exit codes
+- add fnm alias to PATH for companion user (in his .bashrc)
+
 
 # add the fnm node to this users path
 # TODO - verify permissions
